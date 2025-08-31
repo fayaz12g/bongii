@@ -3,7 +3,7 @@ import { Github } from 'lucide-react';
 
 const Footer = () => {
   const socialLinks = [
-    { icon: Github, href: "https://github.com/cfields7/VolunTales", label: "GitHub" },
+    { icon: Github, href: "https://github.com/fayaz12g/bongii", label: "GitHub" },
   ];
 
   return (
