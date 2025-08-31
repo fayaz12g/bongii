@@ -1,6 +1,6 @@
 const sqlite3 = require('sqlite3').verbose();
 
-const DB_FILE = "/data/test.db";
+const DB_FILE = "./test.db";
 
 // Sqlite 3 Database
 let db;
@@ -19,7 +19,7 @@ const init = () => {
     }
   });
 
-  // Create a "users" table, if it does not exist
+    // Create a "users" table, if it does not exist
   db.run(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -38,114 +38,186 @@ const init = () => {
     }
   });
 
-  // Create a "timeRequests" table, if it does not exist
+  // Create a "campaigns" table, if it does not exist
   db.run(`
-    CREATE TABLE IF NOT EXISTS timeRequests (
+    CREATE TABLE IF NOT EXISTS campaigns (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      title TEXT,
-      body TEXT,
-      link TEXT,
-      tag TEXT,
-      owner TEXT,
-      completed BOOLEAN
+      code TEXT UNIQUE NOT NULL,
+      title TEXT NOT NULL,
+      backgroundPreset INTEGER DEFAULT 1,
+      boardSize INTEGER DEFAULT 3, -- 3x3, 4x4, 5x5
+      startDateTime TEXT NOT NULL,
+      status TEXT DEFAULT 'waiting', -- waiting, active, completed
+      createdBy INTEGER NOT NULL,
+      createdAt TEXT NOT NULL,
+      isActive BOOLEAN DEFAULT 1,
+      FOREIGN KEY (createdBy) REFERENCES users(id)
     )
   `, (err) => {
     if (err) {
-      console.error("Error creating timeRequests table:", err);
+      console.error("Error creating campaigns table:", err);
     } else {
-      console.log("timeRequests table created or already exists");
+      console.log("Campaigns table created or already exists");
     }
   });
 
-  // Create a "timeSlots" table, if it does not exist
+  // Create a "campaignCategories" table, if it does not exist
   db.run(`
-    CREATE TABLE IF NOT EXISTS timeSlots (
+    CREATE TABLE IF NOT EXISTS campaignCategories (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      requestId INTEGER,
-      start TEXT,
-      end TEXT
+      campaignId INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL, -- choose_many, choose_one_required, choose_one_optional
+      required BOOLEAN DEFAULT 0,
+      orderIndex INTEGER DEFAULT 0,
+      FOREIGN KEY (campaignId) REFERENCES campaigns(id)
     )
   `, (err) => {
     if (err) {
-      console.error("Error creating timeSlots table:", err);
+      console.error("Error creating campaignCategories table:", err);
     } else {
-      console.log("timeSlots table created or already exists");
+      console.log("CampaignCategories table created or already exists");
     }
   });
 
-  // Create a "financeRequests" table, if it does not exist
+  // Create a "campaignCategoryItems" table, if it does not exist
   db.run(`
-    CREATE TABLE IF NOT EXISTS financeRequests (
+    CREATE TABLE IF NOT EXISTS campaignCategoryItems (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      title TEXT,
-      body TEXT,
-      link TEXT,
-      goal TEXT,
-      tag TEXT,
-      owner TEXT,
-      completed BOOLEAN
+      categoryId INTEGER NOT NULL,
+      text TEXT NOT NULL,
+      orderIndex INTEGER DEFAULT 0,
+      status TEXT DEFAULT 'pending', -- pending, correct, incorrect
+      calledAt TEXT NULL,
+      FOREIGN KEY (categoryId) REFERENCES campaignCategories(id)
     )
   `, (err) => {
     if (err) {
-      console.error("Error creating finalRequests table:", err);
+      console.error("Error creating campaignCategoryItems table:", err);
     } else {
-      console.log("financeRequests table created or already exists");
+      console.log("CampaignCategoryItems table created or already exists");
     }
   });
 
-  // Create an "itemRequests" table, if it does not exist
+  // Create a "playerBoards" table, if it does not exist
   db.run(`
-    CREATE TABLE IF NOT EXISTS itemRequests (
+    CREATE TABLE IF NOT EXISTS playerBoards (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      title TEXT,
-      body TEXT,
-      link TEXT,
-      tag TEXT,
-      owner TEXT,
-      completed BOOLEAN
+      campaignId INTEGER NOT NULL,
+      userId INTEGER NOT NULL,
+      playerName TEXT,
+      boardCode TEXT UNIQUE NOT NULL, -- unique URL code for this board
+      createdAt TEXT NOT NULL,
+      FOREIGN KEY (campaignId) REFERENCES campaigns(id),
+      FOREIGN KEY (userId) REFERENCES users(id),
+      UNIQUE(campaignId, userId)
     )
   `, (err) => {
     if (err) {
-      console.error("Error creating itemRequests table:", err);
+      console.error("Error creating playerBoards table:", err);
     } else {
-      console.log("itemRequests table created or already exists");
+      console.log("PlayerBoards table created or already exists");
     }
   });
 
-  // Create an "items" table, if it does not exist
+  // Create a "playerBoardTiles" table, if it does not exist
   db.run(`
-    CREATE TABLE IF NOT EXISTS items (
+    CREATE TABLE IF NOT EXISTS playerBoardTiles (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      requestId INTEGER,
-      name TEXT,
-      quantity TEXT
+      boardId INTEGER NOT NULL,
+      categoryItemId INTEGER NOT NULL,
+      position INTEGER NOT NULL, -- 0-8 for 3x3, 0-15 for 4x4, 0-24 for 5x5
+      isCenter BOOLEAN DEFAULT 0, -- true for the free center space
+      customText TEXT NULL, -- for when players enter their name in center
+      FOREIGN KEY (boardId) REFERENCES playerBoards(id),
+      FOREIGN KEY (categoryItemId) REFERENCES campaignCategoryItems(id),
+      UNIQUE(boardId, position)
     )
   `, (err) => {
     if (err) {
-      console.error("Error creating items table:", err);
+      console.error("Error creating playerBoardTiles table:", err);
     } else {
-      console.log("items table created or already exists");
+      console.log("PlayerBoardTiles table created or already exists");
     }
   });
 
-  // Create a "comments" table, if it does not exist
+  // Create a "campaignSessions" table, if it does not exist
   db.run(`
-    CREATE TABLE IF NOT EXISTS comments (
+    CREATE TABLE IF NOT EXISTS campaignSessions (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      type TEXT,
-      requestId INTEGER,
-      userId INTEGER,
-      message TEXT,
-      datePosted TEXT
+      campaignId INTEGER NOT NULL,
+      startedAt TEXT,
+      completedAt TEXT,
+      winnerBoardId INTEGER NULL,
+      status TEXT DEFAULT 'scheduled', -- scheduled, active, completed
+      FOREIGN KEY (campaignId) REFERENCES campaigns(id),
+      FOREIGN KEY (winnerBoardId) REFERENCES playerBoards(id)
     )
   `, (err) => {
     if (err) {
-      console.error("Error creating comments table:", err);
+      console.error("Error creating campaignSessions table:", err);
     } else {
-      console.log("comments table created or already exists");
+      console.log("CampaignSessions table created or already exists");
     }
   });
-}
+
+  // Create a "backgroundPresets" table, if it does not exist
+  db.run(`
+    CREATE TABLE IF NOT EXISTS backgroundPresets (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      gradient TEXT NOT NULL,
+      animation TEXT NOT NULL
+    )
+  `, (err) => {
+    if (err) {
+      console.error("Error creating backgroundPresets table:", err);
+    } else {
+      console.log("BackgroundPresets table created or already exists");
+    }
+  });
+
+    // Do some extra logic
+  db.run(`
+      -- Create indexes for better performance
+      CREATE INDEX IF NOT EXISTS idx_campaigns_code ON campaigns(code);
+      CREATE INDEX IF NOT EXISTS idx_campaigns_created_by ON campaigns(createdBy);
+      CREATE INDEX IF NOT EXISTS idx_campaign_categories_campaign ON campaignCategories(campaignId);
+      CREATE INDEX IF NOT EXISTS idx_campaign_category_items_category ON campaignCategoryItems(categoryId);
+      CREATE INDEX IF NOT EXISTS idx_player_boards_campaign ON playerBoards(campaignId);
+      CREATE INDEX IF NOT EXISTS idx_player_boards_user ON playerBoards(userId);
+      CREATE INDEX IF NOT EXISTS idx_player_boards_code ON playerBoards(boardCode);
+      CREATE INDEX IF NOT EXISTS idx_player_board_tiles_board ON playerBoardTiles(boardId);
+
+      -- Insert background presets
+      INSERT OR IGNORE INTO backgroundPresets (id, name, gradient, animation) VALUES 
+        (1, 'Ocean Waves', 'from-blue-400 via-blue-600 to-purple-700', 'wave'),
+        (2, 'Sunset Glow', 'from-orange-400 via-pink-500 to-purple-600', 'glow'),
+        (3, 'Forest Mystery', 'from-green-400 via-teal-500 to-blue-600', 'float'),
+        (4, 'Cherry Blossom', 'from-pink-300 via-purple-400 to-indigo-500', 'drift'),
+        (5, 'Golden Hour', 'from-yellow-400 via-orange-500 to-red-600', 'pulse'),
+        (6, 'Arctic Aurora', 'from-cyan-300 via-blue-400 to-indigo-600', 'shimmer');
+
+      -- Insert sample campaign data
+      INSERT OR IGNORE INTO campaigns (code, title, backgroundPreset, boardSize, startDateTime, createdBy, createdAt) VALUES 
+        ('TEST', 'Sample Bongii Game', 1, 3, '2025-09-15T19:00:00Z', 1, '2025-08-30T10:00:00Z');
+        gameSystem TEXT,
+        setting TEXT,
+        maxPlayers INTEGER DEFAULT 6,
+        isPrivate BOOLEAN DEFAULT 0,
+        createdBy INTEGER NOT NULL,
+        createdAt TEXT NOT NULL,
+        isActive BOOLEAN DEFAULT 1,
+        FOREIGN KEY (createdBy) REFERENCES users(id)
+      );
+  `, (err) => {
+    if (err) {
+      console.error("Error doing extra logic:", err);
+    } else {
+      console.log("Extra logic created successfully or already exists");
+    }
+  });
+};
 
 // DEBUG: Clear all data from the db
 const clean = () => {
@@ -249,7 +321,7 @@ const getUserByUsername = (username) => {
   });
 };
 
-// Get a user by id
+// Get all users
 const getAllUsers = () => {
   console.log('Getting all users');
   return new Promise((resolve, reject) => {
@@ -265,387 +337,419 @@ const getAllUsers = () => {
   });
 };
 
-// Add a new time request
-const addTimeRequest = (owner, timeRequestData) => {
-  console.log("Adding time request with data ", timeRequestData);
+// Get a user by id
+const getAllCampaigns = () => {
+  console.log('Getting all campaigns');
   return new Promise((resolve, reject) => {
-    const { title, body, link, tag, timeSlots } = timeRequestData;
-    if (title && body && tag && owner && timeSlots) {
-      db.run(
-        "INSERT INTO timeRequests (title, body, link, tag, owner, completed) VALUES (?, ?, ?, ?, ?, ?)",
-        [title, body, link, tag, owner, false],
-        function(err) {
-          if (err) {
-            console.error('Error inserting timeRequest: ', err);
-            reject(err);
-          } else {
-            console.log("adding timeslots" + JSON.stringify(timeSlots) + " to request " + this.lastID);
-            for (let timeSlot of timeSlots) {
-              console.log("adding " + timeSlot.start + " - " + timeSlot.end);
-              db.run(
-                "INSERT INTO timeSlots (requestId, start, end) VALUES (?, ?, ?)",
-                [this.lastID, timeSlot.start, timeSlot.end],
-                function(err) {
-                  if (err) {
-                    console.error('Error inserting timeSlot: ', err);
-                    reject(err);
-                  }
-                }
-              );
+    db.all('SELECT * FROM campaigns', (err, campaigns) => {
+      if (err) {
+        console.error('Error getting all campaigns:', err);
+        reject(err);
+      } else {
+        console.log('Found campaigns: ', campaigns);
+        resolve(campaigns);
+      }
+    });
+  });
+};
+
+// Get a campaign by code with all related data
+const getCampaignByCode = (code) => {
+  console.log('Getting campaign with code:', code);
+  return new Promise((resolve, reject) => {
+    db.get('SELECT * FROM campaigns WHERE code = ? AND isActive = 1', [code], async (err, campaign) => {
+      if (err) {
+        console.error('Error getting campaign by code:', err);
+        reject(err);
+      } else if (campaign) {
+        try {
+          // Get categories and their items
+          const categories = await getCampaignCategories(campaign.id);
+          // Get background preset
+          const preset = await getBackgroundPreset(campaign.backgroundPreset);
+          // Get player count
+          const playerCount = await getCampaignPlayerCount(campaign.id);
+          
+          campaign.categories = categories;
+          campaign.backgroundPreset = preset;
+          campaign.playerCount = playerCount;
+          
+          resolve(campaign);
+        } catch (error) {
+          reject(error);
+        }
+      } else {
+        resolve(null);
+      }
+    });
+  });
+};
+
+// Create a new campaign with categories
+const createCampaign = (campaignData) => {
+  console.log('Creating campaign:', campaignData);
+  return new Promise((resolve, reject) => {
+    const { title, backgroundPreset, boardSize, startDateTime, categories, createdBy } = campaignData;
+    
+    // Generate unique 4-letter code
+    const generateCode = () => {
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+      let code = '';
+      for (let i = 0; i < 4; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+      }
+      return code;
+    };
+    
+    const code = generateCode();
+    const createdAt = new Date().toISOString();
+    
+    db.run(
+      `INSERT INTO campaigns (code, title, backgroundPreset, boardSize, startDateTime, createdBy, createdAt, isActive) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
+      [code, title, backgroundPreset, boardSize, startDateTime, createdBy, createdAt],
+      async function(err) {
+        if (err) {
+          console.error('Error creating campaign:', err);
+          reject(err);
+        } else {
+          const campaignId = this.lastID;
+          
+          try {
+            // Add categories
+            for (let i = 0; i < categories.length; i++) {
+              const category = categories[i];
+              await createCampaignCategory(campaignId, category, i);
             }
-
-            const addedRequestData = getTimeRequest(this.lastID);
-            resolve(addedRequestData);
+            
+            resolve({
+              id: campaignId,
+              code,
+              title,
+              backgroundPreset,
+              boardSize,
+              startDateTime,
+              createdBy,
+              createdAt
+            });
+          } catch (categoryError) {
+            reject(categoryError);
           }
-        }
-      );
-    } else {
-      reject("Required field(s) not provided");
-    }
-  });
-};
-
-// Mark time request as completed
-const markTimeRequestCompleted = (id) => {
-  console.log("Marking time request completed");
-  return new Promise((resolve, reject) => {
-    db.run(
-      "UPDATE timeRequests SET completed = ? WHERE id = ?",
-      [true, id],
-      function(err) {
-        if (err) {
-          console.error('Error completing time request: ', err);
-          reject(err);
-        } else {
-          const updatedTimeRequest = getTimeRequest(id);
-          resolve(updatedTimeRequest);
         }
       }
     );
   });
 };
 
-// Get a time request by id
-const getTimeRequest = (id) => {
-  console.log('Getting time request with id ', id);
+// Create campaign category
+const createCampaignCategory = (campaignId, categoryData, orderIndex) => {
   return new Promise((resolve, reject) => {
-    db.get('SELECT * FROM timeRequests WHERE id = ?', [id], (err, timeRequest) => {
-      if (err) {
-        console.error('Error getting time request by id:', err);
-        reject(err);
-      } else {
-        console.log('Found time request:', timeRequest);
-        resolve(timeRequest);
-      }
-    });
-  });
-};
-
-// Get all time request
-const getAllTimeRequests = () => {
-  console.log('Getting all time requests');
-  return new Promise((resolve, reject) => {
-    db.all('SELECT * FROM timeRequests', (err, timeRequests) => {
-      if (err) {
-        console.error('Error getting all time requests:', err);
-        reject(err);
-      } else {
-        console.log('Found time requests: ', timeRequests);
-        resolve(timeRequests);
-      }
-    });
-  });
-};
-
-// Get a time slot by id
-const getTimeSlot = (id) => {
-  console.log('Getting time slot with id ', id);
-  return new Promise((resolve, reject) => {
-    db.get('SELECT * FROM timeSlots WHERE id = ?', [id], (err, timeSlot) => {
-      if (err) {
-        console.error('Error getting time slot by id:', err);
-        reject(err);
-      } else {
-        console.log('Found time slot:', timeSlot);
-        resolve(timeSlot);
-      }
-    });
-  });
-};
-
-// Get a time slots by request id
-const getTimeSlotsByRequest = (id) => {
-  console.log('Getting time slot with request id ', id);
-  return new Promise((resolve, reject) => {
-    db.all('SELECT * FROM timeSlots WHERE requestId = ?', [id], (err, timeSlots) => {
-      if (err) {
-        console.error('Error getting time slots by request id:', err);
-        reject(err);
-      } else {
-        console.log('Found time slots:', timeSlots);
-        resolve(timeSlots);
-      }
-    });
-  });
-};
-
-// Add a new finance request
-const addFinanceRequest = (owner, financeRequestData) => {
-  console.log("Adding finance request with data ", financeRequestData);
-  return new Promise((resolve, reject) => {
-    const { title, body, link, tag, goal } = financeRequestData;
-    if (title && body && tag && goal && owner) {
-      db.run(
-        "INSERT INTO financeRequests (title, body, link, tag, owner, completed, goal) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        [title, body, link, tag, owner, false, goal],
-        function(err) {
-          if (err) {
-            console.error('Error inserting financeRequest: ', err);
-            reject(err);
-          } else {
-            const addedRequestData = getFinanceRequest(this.lastID);
-            resolve(addedRequestData);
-          }
-        }
-      );
-    } else {
-      reject("Required field(s) not provided");
-    }
-  });
-};
-
-// Mark finance request as completed
-const markFinanceRequestCompleted = (id) => {
-  console.log("Marking finance request completed");
-  return new Promise((resolve, reject) => {
+    const { name, type, required, items } = categoryData;
+    
     db.run(
-      "UPDATE financeRequests SET completed = ? WHERE id = ?",
-      [true, id],
-      function(err) {
+      `INSERT INTO campaignCategories (campaignId, name, type, required, orderIndex) 
+       VALUES (?, ?, ?, ?, ?)`,
+      [campaignId, name, type, required, orderIndex],
+      async function(err) {
         if (err) {
-          console.error('Error completing finance request: ', err);
+          console.error('Error creating campaign category:', err);
           reject(err);
         } else {
-          const updatedFinanceRequest = getFinanceRequest(id);
-          resolve(updatedFinanceRequest);
-        }
-      }
-    );
-  });
-};
-
-// Get a finance request by id
-const getFinanceRequest = (id) => {
-  console.log('Getting finance request with id ', id);
-  return new Promise((resolve, reject) => {
-    db.get('SELECT * FROM financeRequests WHERE id = ?', [id], (err, financeRequest) => {
-      if (err) {
-        console.error('Error getting finance request by id:', err);
-        reject(err);
-      } else {
-        console.log('Found finance request:', financeRequest);
-        resolve(financeRequest);
-      }
-    });
-  });
-};
-
-// Get a finance by id
-const getAllFinanceRequests = () => {
-  console.log('Getting all finance requests');
-  return new Promise((resolve, reject) => {
-    db.all('SELECT * FROM financeRequests', (err, financeRequests) => {
-      if (err) {
-        console.error('Error getting all finance requests:', err);
-        reject(err);
-      } else {
-        console.log('Found finance requests: ', financeRequests);
-        resolve(financeRequests);
-      }
-    });
-  });
-};
-
-// Add a new item request
-const addItemRequest = (owner, itemRequestData) => {
-  console.log("Adding item request with data ", itemRequestData);
-  return new Promise((resolve, reject) => {
-    const { title, body, link, tag, items } = itemRequestData;
-    if (title && body && tag && items && owner) {
-      db.run(
-        "INSERT INTO itemRequests (title, body, link, tag, owner, completed) VALUES (?, ?, ?, ?, ?, ?)",
-        [title, body, link, tag, owner, false],
-        function(err) {
-          if (err) {
-            console.error('Error inserting itemRequest: ', err);
-            reject(err);
-          } else {
-            console.log("adding items" + JSON.stringify(items) + " to request " + this.lastID);
-            for (let item of items) {
-              console.log("adding " + item.name + " (" + item.quantity + ")");
-              db.run(
-                "INSERT INTO items (requestId, name, quantity) VALUES (?, ?, ?)",
-                [this.lastID, item.name, item.quantity],
-                function(err) {
-                  if (err) {
-                    console.error('Error inserting item: ', err);
-                    reject(err);
-                  }
-                }
-              );
+          const categoryId = this.lastID;
+          
+          try {
+            // Add category items
+            for (let i = 0; i < items.length; i++) {
+              await createCampaignCategoryItem(categoryId, items[i], i);
             }
-
-            const addedRequestData = getItemRequest(this.lastID);
-            resolve(addedRequestData);
+            
+            resolve({
+              id: categoryId,
+              campaignId,
+              name,
+              type,
+              required,
+              orderIndex
+            });
+          } catch (itemError) {
+            reject(itemError);
           }
-        }
-      );
-    } else {
-      reject("Required field(s) not provided");
-    }
-  });
-};
-
-// Mark item request as completed
-const markItemRequestCompleted = (id) => {
-  console.log("Marking item request completed");
-  return new Promise((resolve, reject) => {
-    db.run(
-      "UPDATE itemRequests SET completed = ? WHERE id = ?",
-      [true, id],
-      function(err) {
-        if (err) {
-          console.error('Error completing item request: ', err);
-          reject(err);
-        } else {
-          const updatedItemRequest = getItemRequest(id);
-          resolve(updatedItemRequest);
         }
       }
     );
   });
 };
 
-// Get an item request by id
-const getItemRequest = (id) => {
-  console.log('Getting item request with id ', id);
+// Create campaign category item
+const createCampaignCategoryItem = (categoryId, text, orderIndex) => {
   return new Promise((resolve, reject) => {
-    db.get('SELECT * FROM itemRequests WHERE id = ?', [id], (err, itemRequest) => {
-      if (err) {
-        console.error('Error getting item request by id:', err);
-        reject(err);
-      } else {
-        console.log('Found item request:', itemRequest);
-        resolve(itemRequest);
+    db.run(
+      `INSERT INTO campaignCategoryItems (categoryId, text, orderIndex) 
+       VALUES (?, ?, ?)`,
+      [categoryId, text, orderIndex],
+      function(err) {
+        if (err) {
+          console.error('Error creating campaign category item:', err);
+          reject(err);
+        } else {
+          resolve({
+            id: this.lastID,
+            categoryId,
+            text,
+            orderIndex
+          });
+        }
       }
-    });
+    );
   });
 };
 
-// Get all item requests
-const getAllItemRequests = () => {
-  console.log('Getting all item requests');
+// Get campaign categories with items
+const getCampaignCategories = (campaignId) => {
   return new Promise((resolve, reject) => {
-    db.all('SELECT * FROM itemRequests', (err, itemRequests) => {
-      if (err) {
-        console.error('Error getting all item requests:', err);
-        reject(err);
-      } else {
-        console.log('Found item requests: ', itemRequests);
-        resolve(itemRequests);
-      }
-    });
-  });
-};
-
-// Get an item by id
-const getItem = (id) => {
-  console.log('Getting item with id ', id);
-  return new Promise((resolve, reject) => {
-    db.get('SELECT * FROM items WHERE id = ?', [id], (err, item) => {
-      if (err) {
-        console.error('Error getting item by id:', err);
-        reject(err);
-      } else {
-        console.log('Found item:', item);
-        resolve(item);
-      }
-    });
-  });
-};
-
-// Get items by request id
-const getItemsByRequest = (id) => {
-  console.log('Getting items with request id ', id);
-  return new Promise((resolve, reject) => {
-    db.all('SELECT * FROM items WHERE requestId = ?', [id], (err, items) => {
-      if (err) {
-        console.error('Error getting items by request id:', err);
-        reject(err);
-      } else {
-        console.log('Found items:', items);
-        resolve(items);
-      }
-    });
-  });
-};
-
-// Add a new comment
-const addComment = (type, userId, commentData) => {
-  console.log(`Adding ${type} comment with data `, commentData);
-  return new Promise((resolve, reject) => {
-    const { requestId, message, datePosted } = commentData;
-    if (type && requestId && userId && message && datePosted) {
-      db.run(
-        "INSERT INTO comments (type, requestId, userId, message, datePosted) VALUES (?, ?, ?, ?, ?)",
-        [type, requestId, userId, message, datePosted],
-        function(err) {
-          if (err) {
-            console.error('Error inserting comments: ', err);
-            reject(err);
-          } else {
-            const addedCommentData = getComment(this.lastID);
-            resolve(addedCommentData);
+    db.all(
+      'SELECT * FROM campaignCategories WHERE campaignId = ? ORDER BY orderIndex',
+      [campaignId],
+      async (err, categories) => {
+        if (err) {
+          console.error('Error getting campaign categories:', err);
+          reject(err);
+        } else {
+          try {
+            // Get items for each category
+            const categoriesWithItems = await Promise.all(
+              categories.map(async (category) => {
+                const items = await getCampaignCategoryItems(category.id);
+                return { ...category, items };
+              })
+            );
+            resolve(categoriesWithItems);
+          } catch (itemError) {
+            reject(itemError);
           }
         }
-      );
-    } else {
-      reject("Required field(s) not provided");
-    }
+      }
+    );
   });
 };
 
-// Get comment by id
-const getComment = (id) => {
-  console.log('Getting comment with id ', id);
+// Get campaign category items
+const getCampaignCategoryItems = (categoryId) => {
   return new Promise((resolve, reject) => {
-    db.get('SELECT * FROM comments WHERE id = ?', [id], (err, comment) => {
+    db.all(
+      'SELECT * FROM campaignCategoryItems WHERE categoryId = ? ORDER BY orderIndex',
+      [categoryId],
+      (err, items) => {
+        if (err) {
+          console.error('Error getting campaign category items:', err);
+          reject(err);
+        } else {
+          resolve(items || []);
+        }
+      }
+    );
+  });
+};
+
+// Get background preset
+const getBackgroundPreset = (presetId) => {
+  return new Promise((resolve, reject) => {
+    db.get('SELECT * FROM backgroundPresets WHERE id = ?', [presetId], (err, preset) => {
       if (err) {
-        console.error('Error getting comment by id:', err);
+        console.error('Error getting background preset:', err);
         reject(err);
       } else {
-        console.log('Found comment:', comment);
-        resolve(comment);
+        resolve(preset);
       }
     });
   });
 };
 
-// Get comments by request id
-const getCommentsByRequestTypeId = (type, requestId) => {
-  console.log(`Getting comments with ${type} request id  ${requestId}`);
+// Create player board
+const createPlayerBoard = (boardData) => {
+  console.log('Creating player board:', boardData);
   return new Promise((resolve, reject) => {
-    db.all('SELECT * FROM comments WHERE type = ? AND requestId = ?', [type, requestId], (err, comment) => {
-      if (err) {
-        console.error('Error getting comment by requestId:', err);
-        reject(err);
-      } else {
-        console.log('Found comment:', comment);
-        resolve(comment);
+    const { campaignId, userId, playerName } = boardData;
+    
+    // Generate unique board code
+    const generateBoardCode = () => {
+      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+      let code = '';
+      for (let i = 0; i < 8; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
       }
-    });
+      return code;
+    };
+    
+    const boardCode = generateBoardCode();
+    const createdAt = new Date().toISOString();
+    
+    db.run(
+      `INSERT INTO playerBoards (campaignId, userId, playerName, boardCode, createdAt) 
+       VALUES (?, ?, ?, ?, ?)`,
+      [campaignId, userId, playerName, boardCode, createdAt],
+      function(err) {
+        if (err) {
+          console.error('Error creating player board:', err);
+          reject(err);
+        } else {
+          resolve({
+            id: this.lastID,
+            campaignId,
+            userId,
+            playerName,
+            boardCode,
+            createdAt
+          });
+        }
+      }
+    );
   });
 };
+
+// Get player board by code
+const getPlayerBoardByCode = (boardCode) => {
+  return new Promise((resolve, reject) => {
+    db.get(
+      `SELECT pb.*, c.title as campaignTitle, c.boardSize, c.backgroundPreset, c.startDateTime, c.status as campaignStatus
+       FROM playerBoards pb 
+       JOIN campaigns c ON pb.campaignId = c.id 
+       WHERE pb.boardCode = ?`,
+      [boardCode],
+      async (err, board) => {
+        if (err) {
+          console.error('Error getting player board by code:', err);
+          reject(err);
+        } else if (board) {
+          try {
+            // Get board tiles
+            const tiles = await getPlayerBoardTiles(board.id);
+            board.tiles = tiles;
+            resolve(board);
+          } catch (tileError) {
+            reject(tileError);
+          }
+        } else {
+          resolve(null);
+        }
+      }
+    );
+  });
+};
+
+// Add player board tile
+const addPlayerBoardTile = (tileData) => {
+  return new Promise((resolve, reject) => {
+    const { boardId, categoryItemId, position, isCenter, customText } = tileData;
+    
+    db.run(
+      `INSERT INTO playerBoardTiles (boardId, categoryItemId, position, isCenter, customText) 
+       VALUES (?, ?, ?, ?, ?)`,
+      [boardId, categoryItemId, position, isCenter, customText],
+      function(err) {
+        if (err) {
+          console.error('Error adding player board tile:', err);
+          reject(err);
+        } else {
+          resolve({
+            id: this.lastID,
+            ...tileData
+          });
+        }
+      }
+    );
+  });
+};
+
+// Get player board tiles
+const getPlayerBoardTiles = (boardId) => {
+  return new Promise((resolve, reject) => {
+    db.all(
+      `SELECT pbt.*, cci.text, cci.status as itemStatus, cc.name as categoryName, cc.type as categoryType
+       FROM playerBoardTiles pbt
+       LEFT JOIN campaignCategoryItems cci ON pbt.categoryItemId = cci.id
+       LEFT JOIN campaignCategories cc ON cci.categoryId = cc.id
+       WHERE pbt.boardId = ?
+       ORDER BY pbt.position`,
+      [boardId],
+      (err, tiles) => {
+        if (err) {
+          console.error('Error getting player board tiles:', err);
+          reject(err);
+        } else {
+          resolve(tiles || []);
+        }
+      }
+    );
+  });
+};
+
+// Get campaign player count
+const getCampaignPlayerCount = (campaignId) => {
+  return new Promise((resolve, reject) => {
+    db.get(
+      'SELECT COUNT(*) as count FROM playerBoards WHERE campaignId = ?',
+      [campaignId],
+      (err, result) => {
+        if (err) {
+          console.error('Error getting campaign player count:', err);
+          reject(err);
+        } else {
+          resolve(result ? result.count : 0);
+        }
+      }
+    );
+  });
+};
+
+// Update campaign category item status (for moderator)
+const updateCampaignCategoryItemStatus = (itemId, status) => {
+  return new Promise((resolve, reject) => {
+    const calledAt = new Date().toISOString();
+    
+    db.run(
+      'UPDATE campaignCategoryItems SET status = ?, calledAt = ? WHERE id = ?',
+      [status, calledAt, itemId],
+      function(err) {
+        if (err) {
+          console.error('Error updating category item status:', err);
+          reject(err);
+        } else {
+          resolve(this.changes);
+        }
+      }
+    );
+  });
+};
+
+// Get user's campaigns (created campaigns only for Bongii)
+const getUserCampaigns = (userId) => {
+  console.log('Getting campaigns for user:', userId);
+  return new Promise((resolve, reject) => {
+    db.all(
+      `SELECT c.*, 
+        COUNT(pb.id) as playerCount,
+        bp.name as presetName,
+        bp.gradient as presetGradient
+       FROM campaigns c
+       LEFT JOIN playerBoards pb ON c.id = pb.campaignId
+       LEFT JOIN backgroundPresets bp ON c.backgroundPreset = bp.id
+       WHERE c.createdBy = ? AND c.isActive = 1
+       GROUP BY c.id
+       ORDER BY c.createdAt DESC`,
+      [userId],
+      (err, campaigns) => {
+        if (err) {
+          console.error('Error getting user campaigns:', err);
+          reject(err);
+        } else {
+          resolve(campaigns || []);
+        }
+      }
+    );
+  });
+};
+
 
 module.exports = {
   init,
@@ -655,23 +759,19 @@ module.exports = {
   getUser,
   getUserByUsername,
   getAllUsers,
-  addTimeRequest,
-  getTimeRequest,
-  markTimeRequestCompleted,
-  getAllTimeRequests,
-  getTimeSlot,
-  getTimeSlotsByRequest,
-  addFinanceRequest,
-  getFinanceRequest,
-  markFinanceRequestCompleted,
-  getAllFinanceRequests,
-  addItemRequest,
-  getItemRequest,
-  markItemRequestCompleted,
-  getAllItemRequests,
-  getItem,
-  getItemsByRequest,
-  addComment,
-  getComment,
-  getCommentsByRequestTypeId
+  getAllCampaigns,
+  createCampaign,
+  getCampaignByCode,
+  getUserCampaigns,
+  updateCampaignCategoryItemStatus,
+  getCampaignPlayerCount,
+  createCampaignCategory,
+  createCampaignCategoryItem,
+  getCampaignCategories,
+  getCampaignCategoryItems,
+  getBackgroundPreset,
+  createPlayerBoard,
+  getPlayerBoardByCode,
+  addPlayerBoardTile,
+  getPlayerBoardTiles
 };

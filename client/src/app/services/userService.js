@@ -1,4 +1,4 @@
-const serverPath = "https://cfhc.fly.dev/api";
+const serverPath = "http://localhost:3001/api";
 
 export const userService = {
 

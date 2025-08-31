@@ -1,11 +1,13 @@
 "use client";
 import { useState, useEffect } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import { profileService } from '../services/profileService';
 import Background from '../components/background';
 import Header from '../components/header';
 import Footer from '../components/footer';
 
 export default function ProfilePage() {
+  const router = useRouter(); 
   const [userData, setUserData] = useState({
     firstName: '',
     lastName: '',
@@ -16,6 +18,7 @@ export default function ProfilePage() {
   });
   const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState('');
+
 
   useEffect(() => {
     const loadUserData = async () => {
@@ -32,6 +35,19 @@ export default function ProfilePage() {
     });
       
     };
+
+    // Check if the token exists in localStorage
+    const token = localStorage.getItem('token');
+    
+    const seeifyouhaveaccess = async () => {
+      console.log("Checking access");
+      profileService.getUserData().then(response => {
+          if (!response.ok) {
+            router.push('/login'); // Redirect to home page
+          }
+      });
+    }
+    seeifyouhaveaccess();
     loadUserData();
   }, []);
 
@@ -71,7 +87,7 @@ export default function ProfilePage() {
       <Background />
       {/* <Footer /> */}
       <div className="max-w-6xl mx-auto pt-24 px-4">
-        <div className="bg-gray-800 rounded-2xl shadow-lg p-8 max-w-2xl mx-auto">
+        <div className=" backdrop-blur-md bg-white/20 border-b border-white/40 rounded-2xl shadow-lg p-8 max-w-2xl mx-auto">
           <h1 className="text-3xl font-bold text-white text-center mb-8">Your Profile</h1>
           
           <form onSubmit={handleSubmit} className="space-y-6">

@@ -25,7 +25,7 @@ const Footer = () => {
       </div>
 
         <p className="text-center text-gray-200">
-          Not © {new Date().getFullYear()}. Created by Fayaz, Christopher, Carynne & Huzaifa for Hack_NCState on 2025.
+          Created by Fayaz, Not © {new Date().getFullYear()}.
         </p>
       </div>
     </footer>

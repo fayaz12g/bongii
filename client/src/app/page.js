@@ -1,98 +1,392 @@
 "use client";
-import { useState, useEffect } from 'react';
-import { userService } from './services/userService';
-import { useRouter } from 'next/navigation';
-import Header from './components/header';
-import Background from './components/background';
-import { profileService } from './services/profileService';
-import { User, UserPlus } from 'lucide-react';
-import { motion } from 'framer-motion';
-import Footer from './components/footer';
+
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import Background from "./components/background";
+import Footer from "./components/footer";
+import { motion, AnimatePresence } from "framer-motion";
+import { Upload, Play, ArrowLeft } from "lucide-react";
+import { userService } from "./services/userService";
+import { campaignService } from "./services/campaignService";
 
 export default function Home() {
   const router = useRouter();
-  const [users, setUsers] = useState(null);
+  const [step, setStep] = useState("main"); // "main" | "play" | "create-login" | "create-register"
+  const [campaignCode, setCampaignCode] = useState("");
 
-  const doLogin = async () => {
-    router.push('/login');
-  };
+  // login states
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+
+  // register states
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [regUsername, setRegUsername] = useState("");
+  const [regPassword, setRegPassword] = useState("");
+  const [email, setEmail] = useState("");
+  const [profileIcon, setProfileIcon] = useState("1");
+  const [isFormValid, setIsFormValid] = useState(false);
+  const [responseGet, setResponseGet] = useState("");
 
   useEffect(() => {
-    const fetchAndLoginUser = async () => {
+    setIsFormValid(firstName && lastName && regUsername && regPassword);
+  }, [firstName, lastName, regUsername, regPassword]);
+
+  // --- PLAY ---
+  const handlePlaySubmit = async () => {
+    if (campaignCode.length === 4) {
       try {
-        // Fetch user data
-        const userResponse = await profileService.getUserData();
-        const userData = await userResponse.json();
-  
-        // Log in using username and password from user data
-        const loginResponse = await userService.loginUser(userData.username, userData.password);
-        const loginData = await loginResponse.json();
-  
-        // Store the token in localStorage and route to home
-        if (loginData.token) {
-          localStorage.setItem("token", loginData.token);
-          router.push('/home');
-        } else {
-          console.log('Login failed: No token returned.');
+        const isValid = await campaignService.validateCampaign(campaignCode);
+        if (isValid) {
+          router.push(`/${campaignCode}`);
         }
       } catch (error) {
-        console.log('An error occurred:', error);
+        alert(error.message);
       }
-    };
-  
-    fetchAndLoginUser();
-  }, [router]);
-  
+    } else {
+      alert("Please enter a 4-letter code.");
+    }
+  };
 
-  const handleRegister = () => {
-    router.push('/register');
+  // --- LOGIN ---
+  const handleLogin = async () => {
+    const response = await userService.loginUser(username, password);
+    if (response.ok) {
+      const data = await response.json();
+      localStorage.setItem("token", data.token);
+      router.push("/create");
+    } else {
+      alert("Invalid credentials");
+    }
+  };
+
+  // --- REGISTER ---
+  const handleRegister = async () => {
+    if (!isFormValid) return;
+
+    const response = await userService.addUser(
+      firstName,
+      lastName,
+      regUsername,
+      regPassword,
+      email,
+      profileIcon
+    );
+
+    if (response.ok) {
+      const loginResponse = await userService.loginUser(regUsername, regPassword);
+      if (loginResponse.ok) {
+        const data = await loginResponse.json();
+        localStorage.setItem("token", data.token);
+        router.push("/home");
+      }
+    } else {
+      alert("Username already exists");
+    }
   };
 
   return (
-    <div> 
-      <Footer />
+    <div className="relative min-h-screen flex flex-col">
       <Background />
+      <div className="flex-1 flex flex-col justify-center items-center px-6">
+        <div className="w-full max-w-2xl space-y-6 text-center">
+          {/* ---------- MAIN MENU ---------- */}
+          <AnimatePresence>
+            {step === "main" && (
+              <>
+                {/* Logo */}
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex justify-center items-center mb-20"
+                >
+                  <img src="/logo.png" alt="App Logo" className="h-25 object-contain" />
+                </motion.div>
 
-         <motion.div 
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="max-w-2xl mx-auto space-y-6"
-        >
+                {/* Play */}
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.97 }}
+                  className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white p-5 rounded-2xl shadow-lg flex items-center justify-center space-x-3 border-4 border-white/30 hover:border-white/50 transition-colors"
+                  onClick={() => setStep("play")}
+                >
+                  <Play className="w-6 h-6" />
+                  <span className="text-lg font-semibold">Play</span>
+                </motion.button>
 
-        {/* Logo */}
-        <div className="flex justify-center items-center mt-20 mb-8">
-          <img 
-            src="/logo.png" 
-            alt="App Logo" 
-            className="h-41 object-contain py-8"
-          />
+                {/* Create */}
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.97 }}
+                  className="w-full bg-gradient-to-r from-green-400 to-green-500 text-white p-5 rounded-2xl shadow-lg flex items-center justify-center space-x-3 border-4 border-white/30 hover:border-white/50 transition-colors"
+                  onClick={() => setStep("create-login")}
+                >
+                  <Upload className="w-6 h-6" />
+                  <span className="text-lg font-semibold">Create</span>
+                </motion.button>
+              </>
+            )}
+          </AnimatePresence>
+
+          {/* ---------- PLAY FLOW ---------- */}
+          <AnimatePresence>
+            {step === "play" && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="space-y-6"
+              >
+                <div className="bg-black/30 backdrop-blur-sm rounded-3xl p-8 border-2 border-white/20 shadow-2xl">
+                  <div className="flex justify-start mb-6">
+                    <button
+                      onClick={() => setStep("main")}
+                      className="flex items-center text-white bg-white/10 hover:bg-white/20 px-4 py-2 rounded-xl border-2 border-white/30 hover:border-white/50 transition-all"
+                    >
+                      <ArrowLeft className="w-5 h-5 mr-2" />
+                      <span className="font-medium">Back</span>
+                    </button>
+                  </div>
+                  <h2 className="text-2xl font-bold text-white mb-6">Enter a campaign code</h2>
+                  <input
+                    type="text"
+                    value={campaignCode}
+                    onChange={(e) => setCampaignCode(e.target.value.toUpperCase())}
+                    maxLength={4}
+                    className="w-full px-4 py-3 border-3 border-white/40 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-400 bg-white/10 text-white placeholder-gray-300 uppercase text-center tracking-widest text-xl font-bold transition-all"
+                    placeholder="ABCD"
+                  />
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.97 }}
+                    onClick={handlePlaySubmit}
+                    className="w-full bg-gradient-to-r from-blue-500 to-blue-600 text-white p-4 rounded-2xl shadow-lg font-semibold border-4 border-white/30 hover:border-white/50 transition-colors mt-6"
+                  >
+                    Play
+                  </motion.button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* ---------- CREATE LOGIN FLOW ---------- */}
+          <AnimatePresence>
+            {step === "create-login" && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="space-y-6"
+              >
+                <div className="bg-black/30 backdrop-blur-sm rounded-3xl p-8 border-2 border-white/20 shadow-2xl">
+                  <div className="flex justify-start mb-6">
+                    <button
+                      onClick={() => setStep("main")}
+                      className="flex items-center text-white bg-white/10 hover:bg-white/20 px-4 py-2 rounded-xl border-2 border-white/30 hover:border-white/50 transition-all"
+                    >
+                      <ArrowLeft className="w-5 h-5 mr-2" />
+                      <span className="font-medium">Back</span>
+                    </button>
+                  </div>
+                  <h2 className="text-2xl font-bold text-white mb-6">
+                    Login first to create a new campaign
+                  </h2>
+                  <div className="space-y-4">
+                    <input
+                      type="text"
+                      placeholder="Username"
+                      value={username}
+                      onChange={(e) => setUsername(e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl bg-indigo-900/70 text-white placeholder-gray-300 border-3 border-white/30 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500 transition-all"
+                    />
+                    <input
+                      type="password"
+                      placeholder="Password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl bg-indigo-900/70 text-white placeholder-gray-300 border-3 border-white/30 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-500 transition-all"
+                    />
+                  </div>
+                  <div className="flex justify-between items-center mt-6">
+                    <button
+                      onClick={() => setStep("create-register")}
+                      className="text-sm text-gray-300 underline hover:text-white transition-colors font-medium"
+                    >
+                      Need an account?
+                    </button>
+                    <button
+                      onClick={handleLogin}
+                      className="px-6 py-3 bg-gradient-to-r from-green-500 to-green-600 rounded-xl text-white font-semibold border-3 border-white/30 hover:border-white/50 hover:scale-105 transition-all"
+                    >
+                      Login
+                    </button>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* ---------- CREATE REGISTER FLOW ---------- */}
+          <AnimatePresence>
+            {step === "create-register" && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -20 }}
+                className="space-y-6"
+              >
+                <div className="bg-black/30 backdrop-blur-sm rounded-3xl p-8 border-2 border-white/20 shadow-2xl text-left">
+                  <div className="flex justify-start mb-6">
+                    <button
+                      onClick={() => setStep("main")}
+                      className="flex items-center text-white bg-white/10 hover:bg-white/20 px-4 py-2 rounded-xl border-2 border-white/30 hover:border-white/50 transition-all"
+                    >
+                      <ArrowLeft className="w-5 h-5 mr-2" />
+                      <span className="font-medium">Back</span>
+                    </button>
+                  </div>
+
+                  <h2 className="text-2xl font-bold text-white mb-6">
+                    Register a new account
+                  </h2>
+
+                  {/* Profile Icons */}
+                  <div className="mb-6">
+                    <label className="block text-sm font-medium text-white mb-2">
+                      Select Profile Icon <span className="text-red-500">*</span>
+                    </label>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      {["1", "2", "3", "4"].map((id) => (
+                        <div
+                          key={id}
+                          onClick={() => setProfileIcon(id)}
+                          className={`cursor-pointer p-2 rounded-lg border-2 ${
+                            profileIcon === id ? "border-red-500" : "border-gray-600"
+                          }`}
+                        >
+                          <div className="w-full aspect-square rounded overflow-hidden">
+                            <img
+                              src={`/icon-${id}.png`}
+                              alt={`Profile Icon ${id}`}
+                              className="w-full h-full object-cover hover:scale-105 transition-transform"
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* First + Last Name */}
+                  <div className="flex space-x-4 mb-4">
+                    <div className="flex-1">
+                      <label className="block text-sm font-medium text-white mb-1">
+                        First Name <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={firstName}
+                        onChange={(e) => setFirstName(e.target.value)}
+                        className="w-full px-4 py-3 rounded-xl bg-green-900/70 text-white placeholder-gray-300 border-3 border-white/30 focus:border-green-400 focus:ring-2 focus:ring-green-500 transition-all"
+                        placeholder="Enter first name"
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="block text-sm font-medium text-white mb-1">
+                        Last Name <span className="text-red-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={lastName}
+                        onChange={(e) => setLastName(e.target.value)}
+                        className="w-full px-4 py-3 rounded-xl bg-green-900/70 text-white placeholder-gray-300 border-3 border-white/30 focus:border-green-400 focus:ring-2 focus:ring-green-500 transition-all"
+                        placeholder="Enter last name"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Username */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-white mb-1">
+                      Username <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={regUsername}
+                      onChange={(e) => setRegUsername(e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl bg-green-900/70 text-white placeholder-gray-300 border-3 border-white/30 focus:border-green-400 focus:ring-2 focus:ring-green-500 transition-all"
+                      placeholder="Enter username"
+                    />
+                  </div>
+
+                  {/* Password */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-white mb-1">
+                      Password <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="password"
+                      value={regPassword}
+                      onChange={(e) => setRegPassword(e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl bg-green-900/70 text-white placeholder-gray-300 border-3 border-white/30 focus:border-green-400 focus:ring-2 focus:ring-green-500 transition-all"
+                      placeholder="Enter password"
+                    />
+                  </div>
+
+                  {/* Email */}
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-white mb-1">
+                      Email (optional)
+                    </label>
+                    <input
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="w-full px-4 py-3 rounded-xl bg-green-900/70 text-white placeholder-gray-300 border-3 border-white/30 focus:border-green-400 focus:ring-2 focus:ring-green-500 transition-all"
+                      placeholder="Enter email"
+                    />
+                  </div>
+
+                  {/* Buttons */}
+                  <div className="flex justify-between items-center mt-6">
+                    <button
+                      onClick={() => setStep("create-login")}
+                      className="text-sm text-gray-300 underline hover:text-white transition-colors font-medium"
+                    >
+                      Already have an account?
+                    </button>
+                    <div className="space-x-4">
+                      <button
+                        type="button"
+                        onClick={() => setStep("main")}
+                        className="px-4 py-2 rounded-md bg-gradient-to-b from-red-500 to-red-600 text-white"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleRegister}
+                        disabled={!isFormValid}
+                        className={`px-4 py-2 rounded-md transition-colors ${
+                          isFormValid
+                            ? "bg-gradient-to-b from-green-400 to-green-500 hover:bg-green-600 text-white"
+                            : "bg-gray-500 text-gray-300 cursor-not-allowed"
+                        }`}
+                      >
+                        Register
+                      </button>
+                    </div>
+                  </div>
+
+                  <label className="block text-sm font-medium text-red-400 mt-4">
+                    {responseGet}
+                  </label>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
-
-        <motion.button
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
-        className="w-full bg-gradient-to-b from-green-200 to-green-300 text-black p-6 rounded-lg shadow-lg flex items-center justify-center space-x-3 hover:from-green-300 hover:to-green-400 transition-all"
-        onClick={() => {
-            doLogin();
-          }}
-      >
-        <User className="w-6 h-6" />
-        <span className="text-lg font-semibold">Login</span>
-      </motion.button>
-
-      <motion.button
-        whileHover={{ scale: 1.05 }}
-        whileTap={{ scale: 0.95 }}
-        className="w-full bg-gradient-to-b from-green-300 to-green-400 text-black p-6 rounded-lg shadow-lg flex items-center justify-center space-x-3 hover:from-green-400 hover:to-green-500 transition-all"
-        onClick={() => handleRegister()}
-      >
-        <UserPlus className="w-6 h-6" />
-        <span className="text-lg font-semibold">Register</span>
-      </motion.button>
-
-      </motion.div>
       </div>
-      
-    // </div>
+      <Footer />
+    </div>
   );
 }

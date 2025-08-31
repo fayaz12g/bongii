@@ -8,7 +8,7 @@ const app = express();
 const router = express.Router();
 const database = require('./database');
 
-const PORT = 3000;
+const PORT = 3001;
 
 app.use(cors());
 app.use(express.json());
@@ -91,6 +91,17 @@ router.route('/users').get(verifyToken, async (req, res) => {
   }
 });
 
+// Get all campaigns (browse)
+router.route('/campaigns').get(async (req, res) => {
+  try {
+    const campaigns = await database.getAllCampaigns();
+    res.json(campaigns)
+  } catch (error) {
+    console.error('Error getting all campaigns:', error);
+    res.status(500).json({ error: error });
+  }
+});
+
 // Get currently logged in user
 router.route('/users/current').get(verifyToken, async (req, res) => {
   try {
@@ -117,237 +128,418 @@ router.route('/users/current').put(verifyToken, async (req, res) => {
   }
 });
 
-// Add new time request
-router.route('/requests/time').post(verifyToken, async (req, res) => {
+// Validate campaign by code
+router.route('/campaigns/validate/:code').get(async (req, res) => {
+  console.log("Looking for campaign: ", req.params.code)
   try {
-    const currentUser = await database.getUserByUsername(req.user.username);
-    // Add time request to database
-    const timeRequestAdded = await database.addTimeRequest(currentUser.id, req.body);
-    res.json(timeRequestAdded);
+    const campaign = await database.getCampaignByCode(req.params.code);
+    if (campaign) {
+      console.log("Campaign found")
+      res.sendStatus(200);
+    } else {
+      console.log("Campaign not found")
+      res.status(404).json({ error: "Campaign Not Found" });
+    }
   } catch (error) {
-    console.error('Error adding time request:', error);
-    res.status(500).json({ error: error });
+    console.error(`Error getting campaign ${req.params.code}:`, error);
+    res.status(500).json({ error: error.message });
   }
 });
 
-// Get time request by id
-router.route('/requests/time/:id').get(verifyToken, async (req, res) => {
+// Bongii Campaign Routes - Add these to your existing router
+
+// Get campaign by code with all Bongii data
+router.route('/campaigns/:code').get(async (req, res) => {
+  try {
+    const campaign = await database.getCampaignByCode(req.params.code);
+    if (campaign) {
+      res.json(campaign);
+    } else {
+      res.status(404).json({ error: "Campaign Not Found" });
+    }
+  } catch (error) {
+    console.error(`Error getting campaign ${req.params.code}:`, error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create new Bongii campaign
+router.route('/campaigns').post(verifyToken, async (req, res) => {
   try {
     const currentUser = await database.getUserByUsername(req.user.username);
-    const request = await database.getTimeRequest(req.params.id);
-    if (request) {
-      let comments = await database.getCommentsByRequestTypeId("time", req.params.id);
-      console.log("Found comments in request: " + comments);
-      for (let comment of comments) {
-        const user = await database.getUser(comment.userId);
-        console.log("user to expand: " + JSON.stringify(user));
-        comment.firstName = user.firstName;
-        comment.lastName = user.lastName;
-        comment.username = user.username;
-        comment.profileIcon = user.profileIcon;
-        console.log("Comment with correct fields: " + JSON.stringify(comment));
+    const { title, backgroundPreset, boardSize, startDateTime, categories } = req.body;
+    
+    const campaignData = {
+      title,
+      backgroundPreset: backgroundPreset || 1,
+      boardSize: boardSize || 3,
+      startDateTime,
+      categories,
+      createdBy: currentUser.id
+    };
+    
+    const campaign = await database.createCampaign(campaignData);
+    
+    res.status(201).json({
+      success: true,
+      campaign: campaign
+    });
+  } catch (error) {
+    console.error('Error creating campaign:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Create player board for a campaign
+router.route('/campaigns/:code/board').post(verifyToken, async (req, res) => {
+  try {
+    const currentUser = await database.getUserByUsername(req.user.username);
+    const campaign = await database.getCampaignByCode(req.params.code);
+    
+    if (!campaign) {
+      return res.status(404).json({ error: "Campaign Not Found" });
+    }
+    
+    // Check if campaign has started
+    if (campaign.status === 'active') {
+      return res.status(400).json({ error: "Campaign has already started" });
+    }
+    
+    const { playerName, selectedTiles } = req.body;
+    
+    // Create player board
+    const boardData = {
+      campaignId: campaign.id,
+      userId: currentUser.id,
+      playerName: playerName || currentUser.firstName || 'Player'
+    };
+    
+    const board = await database.createPlayerBoard(boardData);
+    
+    // Add selected tiles to board
+    for (const tile of selectedTiles) {
+      await database.addPlayerBoardTile({
+        boardId: board.id,
+        categoryItemId: tile.categoryItemId,
+        position: tile.position,
+        isCenter: tile.isCenter || false,
+        customText: tile.customText
+      });
+    }
+    
+    res.json({ 
+      success: true, 
+      boardCode: board.boardCode,
+      message: "Board created successfully" 
+    });
+  } catch (error) {
+    console.error('Error creating player board:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get player board by board code
+router.route('/boards/:boardCode').get(async (req, res) => {
+  try {
+    const board = await database.getPlayerBoardByCode(req.params.boardCode);
+    if (board) {
+      res.json(board);
+    } else {
+      res.status(404).json({ error: "Board Not Found" });
+    }
+  } catch (error) {
+    console.error(`Error getting board ${req.params.boardCode}:`, error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Update player board
+router.route('/boards/:boardCode').put(verifyToken, async (req, res) => {
+  try {
+    const currentUser = await database.getUserByUsername(req.user.username);
+    const board = await database.getPlayerBoardByCode(req.params.boardCode);
+    
+    if (!board) {
+      return res.status(404).json({ error: "Board Not Found" });
+    }
+    
+    // Check if user owns this board
+    if (board.userId !== currentUser.id) {
+      return res.status(403).json({ error: "Not authorized to edit this board" });
+    }
+    
+    const { tiles, playerName } = req.body;
+    
+    // Update player name if provided
+    if (playerName) {
+      await database.updatePlayerBoardName(board.id, playerName);
+    }
+    
+    // Update tiles if provided
+    if (tiles && Array.isArray(tiles)) {
+      for (const tile of tiles) {
+        if (tile.id) {
+          // Update existing tile
+          await database.updatePlayerBoardTile(tile.id, tile);
+        } else {
+          // Add new tile
+          await database.addPlayerBoardTile({
+            boardId: board.id,
+            ...tile
+          });
+        }
       }
-      request.comments = comments;
-      request.owner = (currentUser.id == request.owner);
-      res.json(request);
+    }
+    
+    res.json({ success: true, message: "Board updated successfully" });
+  } catch (error) {
+    console.error('Error updating board:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Start campaign (moderator only)
+router.route('/campaigns/:code/start').post(verifyToken, async (req, res) => {
+  try {
+    const currentUser = await database.getUserByUsername(req.user.username);
+    const campaign = await database.getCampaignByCode(req.params.code);
+    
+    if (!campaign) {
+      return res.status(404).json({ error: "Campaign Not Found" });
+    }
+    
+    // Check if user is the creator
+    if (campaign.createdBy !== currentUser.id) {
+      return res.status(403).json({ error: "Only campaign creator can start the game" });
+    }
+    
+    // Update campaign status to active
+    await database.updateCampaignStatus(campaign.id, 'active');
+    
+    res.json({ success: true, message: "Campaign started successfully" });
+  } catch (error) {
+    console.error('Error starting campaign:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Call item correct/incorrect (moderator only)
+router.route('/campaigns/:code/call').post(verifyToken, async (req, res) => {
+  try {
+    const currentUser = await database.getUserByUsername(req.user.username);
+    const campaign = await database.getCampaignByCode(req.params.code);
+    
+    if (!campaign) {
+      return res.status(404).json({ error: "Campaign Not Found" });
+    }
+    
+    // Check if user is the creator
+    if (campaign.createdBy !== currentUser.id) {
+      return res.status(403).json({ error: "Only campaign creator can call items" });
+    }
+    
+    const { itemId, status } = req.body;
+    
+    if (!['correct', 'incorrect'].includes(status)) {
+      return res.status(400).json({ error: "Status must be 'correct' or 'incorrect'" });
+    }
+    
+    await database.updateCampaignCategoryItemStatus(itemId, status);
+    
+    // TODO: Implement WebSocket broadcast to all connected players
+    // broadcastToPlayers(campaign.id, { type: 'ITEM_CALLED', itemId, status });
+    
+    res.json({ success: true, message: `Item marked as ${status}` });
+  } catch (error) {
+    console.error('Error calling campaign item:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get campaign by code
+router.route('/campaigns/:code').get(async (req, res) => {
+  try {
+    const campaign = await database.getCampaignByCode(req.params.code);
+    if (campaign) {
+      // Get additional campaign data
+      const players = await database.getCampaignPlayers(campaign.id);
+      const sessions = await database.getCampaignSessions(campaign.id);
+      const creator = await database.getUser(campaign.createdBy);
+      
+      // Add computed fields
+      campaign.playerCount = players.length;
+      campaign.sessionCount = sessions.length;
+      campaign.creatorName = creator ? creator.username : 'Unknown';
+      campaign.players = players;
+      campaign.nextSession = sessions.length > 0 ? sessions[0].scheduledDate : null;
+      
+      res.json(campaign);
     } else {
-      res.status(404).json({ error: "Time Request Not Found" });
+      res.status(404).json({ error: "Campaign Not Found" });
     }
   } catch (error) {
-    console.error(`Error getting time request ${req.params.id}:`, error);
-    res.status(500).json({ error: error });
+    console.error(`Error getting campaign ${req.params.code}:`, error);
+    res.status(500).json({ error: error.message });
   }
 });
 
-// Mark time request completed
-router.route('/requests/time/:id/complete').put(verifyToken, async (req, res) => {
+// Create new campaign
+router.route('/campaigns').post(verifyToken, async (req, res) => {
   try {
     const currentUser = await database.getUserByUsername(req.user.username);
-    const request = await database.getTimeRequest(req.params.id);
-    if (currentUser.id == request.owner) {
-      const completedRequest = await database.markTimeRequestCompleted(req.params.id);
-      res.json(completedRequest);
-    } else {
-      res.status(403).json({ error: "Current user does not have permission to complete this request" });
-    }
-  } catch (error) {
-    console.error('Error editing user:', error);
-    res.status(500).json({ error: error });
-  }
-});
-
-// Get all time requests
-router.route('/requests/time').get(verifyToken, async (req, res) => {
-  try {
-    const timeRequests = await database.getAllTimeRequests();
-    for (const timeRequest of timeRequests) {
-      timeRequest.timeSlots = await database.getTimeSlotsByRequest(timeRequest.id);
-      console.log("timeSlots: " + JSON.stringify(timeRequest.timeSlots));
-    }
-    res.json(timeRequests)
-  } catch (error) {
-    console.error('Error getting all time requests:', error);
-    res.status(500).json({ error: error });
-  }
-});
-
-// Add new finance request
-router.route('/requests/finance').post(verifyToken, async (req, res) => {
-  try {
-    const currentUser = await database.getUserByUsername(req.user.username);
-    // Add finance request to database
-    const financeRequestAdded = await database.addFinanceRequest(currentUser.id, req.body);
-    res.json(financeRequestAdded);
-  } catch (error) {
-    console.error('Error adding finance request:', error);
-    res.status(500).json({ error: error });
-  }
-});
-
-// Get finance request by id
-router.route('/requests/finance/:id').get(verifyToken, async (req, res) => {
-  try {
-    const currentUser = await database.getUserByUsername(req.user.username);
-    const request = await database.getFinanceRequest(req.params.id);
-    if (request) {
-      let comments = await database.getCommentsByRequestTypeId("finance", req.params.id);
-      console.log("Found comments in request: " + comments);
-      for (let comment of comments) {
-        const user = await database.getUser(comment.userId);
-        console.log("user to expand: " + JSON.stringify(user));
-        comment.firstName = user.firstName;
-        comment.lastName = user.lastName;
-        comment.username = user.username;
-        comment.profileIcon = user.profileIcon;
-        console.log("Comment with correct fields: " + JSON.stringify(comment));
+    const { name, description, gameSystem, setting, maxPlayers, isPrivate } = req.body;
+    
+    // Generate unique 4-letter code
+    let code;
+    let isUnique = false;
+    while (!isUnique) {
+      code = generateCampaignCode();
+      const existing = await database.getCampaignByCode(code);
+      if (!existing) {
+        isUnique = true;
       }
-      request.comments = comments;
-      request.owner = (currentUser.id == request.owner);
-      res.json(request);
-    } else {
-      res.status(404).json({ error: "Finance Request Not Found" });
     }
-  } catch (error) {
-    console.error(`Error getting finance request ${req.params.id}:`, error);
-    res.status(500).json({ error: error });
-  }
-});
-
-// Mark finance request completed
-router.route('/requests/finance/:id/complete').put(verifyToken, async (req, res) => {
-  try {
-    const currentUser = await database.getUserByUsername(req.user.username);
-    const request = await database.getFinanceRequest(req.params.id);
-    if (currentUser.id == request.owner) {
-      const completedRequest = await database.markFinanceRequestCompleted(req.params.id);
-      res.json(completedRequest);
-    } else {
-      res.status(403).json({ error: "Current user does not have permission to complete this request" });
-    }
-  } catch (error) {
-    console.error('Error editing user:', error);
-    res.status(500).json({ error: error });
-  }
-});
-
-// Get all finance requests
-router.route('/requests/finance').get(verifyToken, async (req, res) => {
-  try {
-    const financeRequests = await database.getAllFinanceRequests();
-    res.json(financeRequests)
-  } catch (error) {
-    console.error('Error getting all finance requests:', error);
-    res.status(500).json({ error: error });
-  }
-});
-
-// Add new item request
-router.route('/requests/item').post(verifyToken, async (req, res) => {
-  try {
-    const currentUser = await database.getUserByUsername(req.user.username);
-    // Add item request to database
-    const itemRequestAdded = await database.addItemRequest(currentUser.id, req.body);
-    res.json(itemRequestAdded);
-  } catch (error) {
-    console.error('Error adding item request:', error);
-    res.status(500).json({ error: error });
-  }
-});
-
-// Get item request by id
-router.route('/requests/item/:id').get(verifyToken, async (req, res) => {
-  try {
-    const currentUser = await database.getUserByUsername(req.user.username);
-    const request = await database.getItemRequest(req.params.id);
-    if (request) {
-      let comments = await database.getCommentsByRequestTypeId("item", req.params.id);
-      console.log("Found comments in request: " + comments);
-      for (let comment of comments) {
-        const user = await database.getUser(comment.userId);
-        console.log("user to expand: " + JSON.stringify(user));
-        comment.firstName = user.firstName;
-        comment.lastName = user.lastName;
-        comment.username = user.username;
-        comment.profileIcon = user.profileIcon;
-        console.log("Comment with correct fields: " + JSON.stringify(comment));
+    
+    const campaignData = {
+      code,
+      name,
+      description,
+      gameSystem,
+      setting,
+      maxPlayers: maxPlayers || 6,
+      isPrivate: isPrivate || false,
+      createdBy: currentUser.id,
+      createdAt: new Date().toISOString()
+    };
+    
+    const campaign = await database.createCampaign(campaignData);
+    
+    res.status(201).json({
+      success: true,
+      campaign: {
+        ...campaign,
+        code: code
       }
-      request.comments = comments;
-      request.owner = (currentUser.id == request.owner);
-      res.json(request);
-    } else {
-      res.status(404).json({ error: "Item Request Not Found" });
-    }
+    });
   } catch (error) {
-    console.error(`Error getting item request ${req.params.id}:`, error);
-    res.status(500).json({ error: error });
+    console.error('Error creating campaign:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
-// Get all item requests
-router.route('/requests/item').get(verifyToken, async (req, res) => {
-  try {
-    const itemRequests = await database.getAllItemRequests();
-    for (const itemRequest of itemRequests) {
-      itemRequest.items = await database.getItemsByRequest(itemRequest.id);
-      console.log("items: " + JSON.stringify(itemRequest.items));
-    }
-    res.json(itemRequests);
-  } catch (error) {
-    console.error('Error getting all item requests:', error);
-    res.status(500).json({ error: error });
-  }
-});
-
-// Mark item request completed
-router.route('/requests/item/:id/complete').put(verifyToken, async (req, res) => {
+// Join campaign
+router.route('/campaigns/:code/join').post(verifyToken, async (req, res) => {
   try {
     const currentUser = await database.getUserByUsername(req.user.username);
-    const request = await database.getItemRequest(req.params.id);
-    if (currentUser.id == request.owner) {
-      const completedRequest = await database.markItemRequestCompleted(req.params.id);
-      res.json(completedRequest);
-    } else {
-      res.status(403).json({ error: "Current user does not have permission to complete this request" });
+    const campaign = await database.getCampaignByCode(req.params.code);
+    
+    if (!campaign) {
+      return res.status(404).json({ error: "Campaign Not Found" });
     }
+    
+    // Check if user is already in campaign
+    const existingPlayer = await database.getCampaignPlayer(campaign.id, currentUser.id);
+    if (existingPlayer) {
+      return res.status(400).json({ error: "Already joined this campaign" });
+    }
+    
+    // Check if campaign is full
+    const players = await database.getCampaignPlayers(campaign.id);
+    if (players.length >= campaign.maxPlayers) {
+      return res.status(400).json({ error: "Campaign is full" });
+    }
+    
+    const { characterName, characterClass, characterLevel } = req.body;
+    
+    const playerData = {
+      campaignId: campaign.id,
+      userId: currentUser.id,
+      characterName: characterName || 'Unnamed Character',
+      characterClass: characterClass || 'Unknown',
+      characterLevel: characterLevel || 1,
+      joinedAt: new Date().toISOString()
+    };
+    
+    await database.addCampaignPlayer(playerData);
+    
+    res.json({ success: true, message: "Successfully joined campaign" });
   } catch (error) {
-    console.error('Error editing user:', error);
-    res.status(500).json({ error: error });
+    console.error('Error joining campaign:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
-// Add new comment
-router.route('/comments/:type').post(verifyToken, async (req, res) => {
+// Update campaign
+router.route('/campaigns/:code').put(verifyToken, async (req, res) => {
   try {
     const currentUser = await database.getUserByUsername(req.user.username);
-    // Add comment to database
-    const type = req.params.type;
-    const commentAdded = await database.addComment(type, currentUser.id, req.body);
-    res.json(commentAdded);
+    const campaign = await database.getCampaignByCode(req.params.code);
+    
+    if (!campaign) {
+      return res.status(404).json({ error: "Campaign Not Found" });
+    }
+    
+    // Check if user is the creator
+    if (campaign.createdBy !== currentUser.id) {
+      return res.status(403).json({ error: "Only campaign creator can update" });
+    }
+    
+    const updates = req.body;
+    await database.updateCampaign(campaign.id, updates);
+    
+    res.json({ success: true, message: "Campaign updated successfully" });
   } catch (error) {
-    console.error('Error adding comment:', error);
-    res.status(500).json({ error: error });
+    console.error('Error updating campaign:', error);
+    res.status(500).json({ error: error.message });
   }
 });
+
+// Delete campaign
+router.route('/campaigns/:code').delete(verifyToken, async (req, res) => {
+  try {
+    const currentUser = await database.getUserByUsername(req.user.username);
+    const campaign = await database.getCampaignByCode(req.params.code);
+    
+    if (!campaign) {
+      return res.status(404).json({ error: "Campaign Not Found" });
+    }
+    
+    // Check if user is the creator
+    if (campaign.createdBy !== currentUser.id) {
+      return res.status(403).json({ error: "Only campaign creator can delete" });
+    }
+    
+    await database.deleteCampaign(campaign.id);
+    
+    res.json({ success: true, message: "Campaign deleted successfully" });
+  } catch (error) {
+    console.error('Error deleting campaign:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get user's campaigns
+router.route('/campaigns/user').get(verifyToken, async (req, res) => {
+  try {
+    const currentUser = await database.getUserByUsername(req.user.username);
+    const campaigns = await database.getUserCampaigns(currentUser.id);
+    
+    res.json(campaigns);
+  } catch (error) {
+    console.error('Error getting user campaigns:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Utility function to generate campaign codes
+function generateCampaignCode() {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  let code = '';
+  for (let i = 0; i < 4; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
 
 // Clean the database
 router.route('/clean').post(async (req, res) => {

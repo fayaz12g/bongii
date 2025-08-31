@@ -5,63 +5,65 @@ import { usePathname, useRouter } from 'next/navigation';
 import { Menu, X } from 'lucide-react';
 import { profileService } from '../services/profileService';
 
-const menuItems = [
+const menuItemsBase = [
   { name: "Home", path: "/home" },
-  { name: "Volunteer", path: "/volunteer" },
-  { name: "Request Aid", path: "/request" },
+  { name: "Create", path: "/create" },
+  { name: "Browse", path: "/browse" },
+  { name: "Campaigns", path: "/browse" },
   { name: "Profile", path: "/profile" },
-  { name: "Sign Out", path: "/" },
 ];
 
 const Header = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const [loggedIn, setLoggedIn] = useState(false);
   const pathname = usePathname();
   const router = useRouter(); 
 
   useEffect(() => {
-    // Check if the token exists in localStorage
     const token = localStorage.getItem('token');
-    
-    const seeifyouhaveaccess = async () => {
-    profileService.getUserData().then(response => {
+    setLoggedIn(!!token);
+
+    if (token) {
+      // Optionally verify token by fetching user data
+      profileService.getUserData().then(response => {
         if (!response.ok) {
-          router.push('/'); // Redirect to home page
+          localStorage.removeItem('token');
+          setLoggedIn(false);
         }
-    });
+      });
     }
+  }, []);
 
-    seeifyouhaveaccess();
-  }, [router]); 
-
-  const toggleMenu = () => {
-    setIsOpen(!isOpen);
-  };
+  const toggleMenu = () => setIsOpen(!isOpen);
 
   const handleSignOut = () => {
-    // Clear token from local storage
     localStorage.removeItem('token'); 
-    
-    router.push('/'); 
+    setLoggedIn(false);
+    router.push('/login');
   };
+
+  // Build menu dynamically based on login state
+  const menuItems = [...menuItemsBase, loggedIn 
+    ? { name: "Sign Out", action: handleSignOut } 
+    : { name: "Sign In", path: "/login" }
+  ];
 
   return (
     <>
-      <nav className="fixed w-full z-40 bg-gradient-to-br from-gray-800 to-green-900 backdrop-blur-md">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
+      <nav className="fixed w-full z-40 backdrop-blur-md bg-white/20 border-b border-white/40">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-16">
             <motion.div
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               className="text-white font-bold text-xl"
             >
               <Link href="/">
-              <span className="block lg:inline">
-                <img src="/dragon-icon.png" alt="Dragon Icon" className="inline-block mr-2" style={{ width: '2em', height: '2em' }} />
-                VolunTales
-              </span>
-            </Link>
-
-
+                <span className="block lg:inline">
+                  <img src="/logo.png" alt="BONGII Logo" className="inline-block mr-2" style={{ width: '6em', height: '2em' }} />
+                  {/* BONGII */}
+                </span>
+              </Link>
             </motion.div>
 
             {/* Desktop Menu */}
@@ -71,11 +73,11 @@ const Header = () => {
               className="hidden lg:flex space-x-8"
             >
               {menuItems.map((item) => (
-                item.name === "Sign Out" ? (
+                item.action ? (
                   <button
                     key={item.name}
-                    onClick={handleSignOut} 
-                    className={`text-gray-300 hover:text-white transition-colors`}
+                    onClick={item.action} 
+                    className="text-gray-300 hover:text-white transition-colors"
                   >
                     {item.name}
                   </button>
@@ -83,9 +85,7 @@ const Header = () => {
                   <Link
                     key={item.name}
                     href={item.path}
-                    className={`text-gray-300 hover:text-white transition-colors ${
-                      pathname === item.path ? 'text-white' : ''
-                    }`}
+                    className={`text-gray-300 hover:text-white transition-colors ${pathname === item.path ? 'text-white' : ''}`}
                   >
                     {item.name}
                   </Link>
@@ -95,10 +95,7 @@ const Header = () => {
 
             {/* Mobile Menu Button */}
             <div className="lg:hidden">
-              <button
-                onClick={toggleMenu}
-                className="text-gray-300 hover:text-white p-2"
-              >
+              <button onClick={toggleMenu} className="text-gray-300 hover:text-white p-2">
                 <Menu size={24} />
               </button>
             </div>
@@ -110,15 +107,12 @@ const Header = () => {
       <AnimatePresence>
         {isOpen && (
           <div className="fixed inset-0 z-40 lg:hidden">
-            {/* Overlay Background */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 0.95 }}
               exit={{ opacity: 0 }}
               className="fixed inset-0 bg-gray-900"
             />
-
-            {/* Close Button */}
             <motion.button
               initial={{ opacity: 0, scale: 0.8 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -128,8 +122,6 @@ const Header = () => {
             >
               <X size={32} />
             </motion.button>
-
-            {/* Mobile Menu Content */}
             <motion.div
               initial={{ x: "100%" }}
               animate={{ x: 0 }}
@@ -148,42 +140,20 @@ const Header = () => {
                     transition={{ delay: index * 0.1 }}
                     className="relative"
                   >
-                    {item.name === "Sign Out" ? (
+                    {item.action ? (
                       <button
-                        onClick={handleSignOut}
-                        className={`relative text-3xl font-medium transition-colors
-                          ${isActive 
-                            ? 'text-white' 
-                            : 'text-gray-400 hover:text-white'
-                          }
-                        `}
+                        onClick={item.action}
+                        className={`relative text-3xl font-medium transition-colors ${isActive ? 'text-white' : 'text-gray-400 hover:text-white'}`}
                       >
-                        <span className="relative z-10">
-                          {item.name}
-                        </span>
+                        {item.name}
                       </button>
                     ) : (
                       <Link
                         href={item.path}
                         onClick={toggleMenu}
-                        className={`relative text-3xl font-medium transition-colors
-                          ${isActive 
-                            ? 'text-white' 
-                            : 'text-gray-400 hover:text-white'
-                          }
-                        `}
+                        className={`relative text-3xl font-medium transition-colors ${isActive ? 'text-white' : 'text-gray-400 hover:text-white'}`}
                       >
-                        <span className="relative z-10">
-                          {item.name}
-                        </span>
-                        {isActive && (
-                          <motion.div
-                            layoutId="activeTab"
-                            className="absolute -inset-x-4 -inset-y-2 border-2 border-white rounded-lg"
-                            initial={false}
-                            transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                          />
-                        )}
+                        {item.name}
                       </Link>
                     )}
                   </motion.div>

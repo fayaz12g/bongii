@@ -1,12 +1,11 @@
 "use client";
-import { useRouter } from 'next/navigation';
-import { useState, useEffect } from 'react';
-import { userService } from '../services/userService';
-import Background from '../components/background';
-import LoginPage from '../login/page';
-import Footer from '../components/footer';
+import { useRouter } from "next/navigation";
+import { useState, useEffect } from "react";
+import { userService } from "../services/userService";
+import Background from "../components/background";
+import Footer from "../components/footer";
 
-export default function PostPage() {
+export default function RegisterPage() {
   const router = useRouter();
   const [responseGet, setResponseGet] = useState(null);
   const [firstName, setFirstName] = useState("");
@@ -17,176 +16,157 @@ export default function PostPage() {
   const [isFormValid, setIsFormValid] = useState(false);
   const [profileIcon, setProfileIcon] = useState("1");
 
-  // Check if all required fields are filled
   useEffect(() => {
-    setIsFormValid(lastName && firstName && username && password);
-  }, [lastName, firstName, username, password]);
+    setIsFormValid(firstName && lastName && username && password);
+  }, [firstName, lastName, username, password]);
 
   const handleSubmit = () => {
-    if (isFormValid) {
+    if (!isFormValid) return;
 
-      userService.addUser(firstName, lastName, username, password, email, ).then(response => {
+    userService
+      .addUser(firstName, lastName, username, password, email)
+      .then((response) => {
         if (response.ok) {
-          setResponseGet("Post Success");
-          if (username && password) {
-            userService.loginUser(username, password).then(response => {
-              if (response.ok) {
-                setResponseGet("Post Success");
-                
-                return response.json()
-              } else {
-                alert("Invalid Credentials")
-              }
-            })
-            .then(data => {
-                console.log("token: " + data.token)
+          // Auto login after registration
+          userService.loginUser(username, password).then((loginResp) => {
+            if (loginResp.ok) {
+              loginResp.json().then((data) => {
                 localStorage.setItem("token", data.token);
-                router.push('/home');
-            });
-          }
+                router.push("/home");
+              });
+            }
+          });
+        } else {
+          alert("Error: Username Already Exists.");
         }
-      else {
-        alert("Error: Username Already Exists.");
-      }
-    });
-    }
+      });
   };
 
   return (
-    <div>
-        <Background />
-        <Footer />
-      <br />
-      <br />
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold text-white mb-8">Register A New Account</h1>
+    <div className="relative min-h-screen flex flex-col items-center justify-center">
+      <Background />
 
-        <form onSubmit={handleSubmit} className="bg-gradient-to-br from-green-900 to-green-950 rounded-lg shadow-md p-6 space-y-6">
-          <div className="space-y-4">
-            {/* Profile Icons */}
-            <div>
-              <label className="block text-sm font-medium text-white mb-1">
-                Select Profile Icon <span className="text-red-500">*</span>
-              </label>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-2">
-                {['1', '2', '3', '4'].map((id) => (
-                  <div
-                    key={id}
-                    onClick={() => setProfileIcon(id)}
-                    className={`cursor-pointer p-4 rounded-lg border-2 ${
-                      profileIcon === id ? 'border-red-500' : 'border-gray-600'
-                    }`}
-                  >
-                    <div className="w-full aspect-square rounded overflow-hidden">
-                      <img 
-                        src={`/icon-${id}.png`}
-                        alt={`Profile Icon ${id}`}
-                        className="w-full h-full object-cover hover:scale-105 transition-transform"
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-            
-            {/* Name Fields */}
-            <div className="flex space-x-4">
-              {/* First Name */}
-              <div className="flex-1">
-                <label className="block text-sm font-medium text-white mb-1">
-                  First Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                  className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-red-900 focus:border-red-500 bg-green-950 text-white"
-                  placeholder="Enter first name"
-                />
-              </div>
+      <div className="z-10 w-full max-w-3xl p-10 rounded-3xl backdrop-blur-xl bg-white/10 border border-white/20 shadow-2xl">
+        <h1 className="text-4xl font-bold text-white text-center mb-8">
+          Register
+        </h1>
 
-              {/* Last Name */}
-              <div className="flex-1">
-                <label className="block text-sm font-medium text-white mb-1">
-                  Last Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-900 focus:border-blue-500 bg-green-950 text-white"
-                  placeholder="Enter last name"
-                />
-              </div>
-            </div>
-
-
-            {/* Username */}
-            <div>
-              <label className="block text-sm font-medium text-white mb-1">
-                Username <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-900 focus:border-blue-500 bg-green-950 text-white"
-                placeholder="Enter username"
-              />
-            </div>
-
-            {/* Password */}
-            <div>
-              <label className="block text-sm font-medium text-white mb-1">
-                Password <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-900 focus:border-blue-500 bg-green-950 text-white"
-                placeholder="Enter password"
-              />
-            </div>
-
-            {/* Email */}
-            <div>
-              <label className="block text-sm font-medium text-white mb-1">
-                Email Address <span className="text-gray-400">(optional)</span>
-              </label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-900 focus:border-blue-500 bg-green-950 text-white"
-                placeholder="Enter email"
-              />
+        <form className="space-y-6">
+          {/* Profile Icons */}
+          <div>
+            <label className="block text-sm font-medium text-white mb-2">
+              Select Profile Icon <span className="text-red-500">*</span>
+            </label>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {["1", "2", "3", "4"].map((id) => (
+                <div
+                  key={id}
+                  onClick={() => setProfileIcon(id)}
+                  className={`cursor-pointer rounded-lg ${
+                    profileIcon === id
+                      ? "border-8 border-white-500" // thicker border when selected
+                      : "border-0 border-red-600" // thinner default border
+                  }`}
+                >
+                  <img
+                    src={`/icon-${id}.png`}
+                    alt={`Profile Icon ${id}`}
+                    className="w-full h-full object-cover rounded-lg"
+                  />
+                </div>
+              ))}
             </div>
           </div>
 
+          {/* Name Fields */}
+          <div className="flex space-x-4">
+            <input
+              type="text"
+              placeholder="First Name"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              className="flex-1 px-4 py-3 rounded-xl border bg-white/10 text-white placeholder-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-400"
+            />
+            <input
+              type="text"
+              placeholder="Last Name"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              className="flex-1 px-4 py-3 rounded-xl border bg-white/10 text-white placeholder-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-400"
+            />
+          </div>
+
+          {/* Username */}
+          <input
+            type="text"
+            placeholder="Username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            className="w-full px-4 py-3 rounded-xl border bg-white/10 text-white placeholder-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-400"
+          />
+
+          {/* Password */}
+          <input
+            type="password"
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full px-4 py-3 rounded-xl border bg-white/10 text-white placeholder-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-400"
+          />
+
+          {/* Email */}
+          <input
+            type="email"
+            placeholder="Email (optional)"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full px-4 py-3 rounded-xl border bg-white/10 text-white placeholder-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-400"
+          />
+
           {/* Buttons */}
-          <div className="flex justify-end space-x-4">
+          <div className="flex flex-col md:flex-row justify-between items-center gap-4 mt-4">
             <button
               type="button"
-              onClick={() => router.push('/')}
-              className="px-4 py-2 rounded-md bg-gradient-to-b from-red-500 to-red-600 text-white hover:bg-red-90"
+              onClick={() => router.push("/")}
+              className="w-full md:w-auto px-6 py-3 rounded-xl bg-red-500 hover:bg-red-600 text-white font-semibold transition-all"
             >
               Cancel
             </button>
+
             <button
               type="button"
-              onClick={() => handleSubmit()}
+              onClick={handleSubmit}
               disabled={!isFormValid}
-              className={`px-4 py-2 rounded-md transition-colors ${
-                isFormValid ? 'bg-gradient-to-b from-green-400 to-green-500 hover:bg-green-600 text-white' : 'bg-gray-500 text-gray-300 cursor-not-allowed'
+              className={`w-full md:w-auto px-6 py-3 rounded-xl font-semibold transition-all ${
+                isFormValid
+                  ? "bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white"
+                  : "bg-gray-500 text-gray-300 cursor-not-allowed"
               }`}
             >
-              Submit
+              Register
             </button>
           </div>
-          <label className="block text-sm font-medium text-red-700 mb-1">{responseGet}</label>
+
+          {responseGet && (
+            <p className="text-sm text-red-500 mt-2 text-center">{responseGet}</p>
+          )}
         </form>
+
+        {/* Login link */}
+        <div className="mt-6 text-center">
+          <p className="text-white">
+            Already have an account?{" "}
+            <button
+              onClick={() => router.push("/login")}
+              className="underline text-blue-400 hover:text-blue-300 font-medium"
+            >
+              Login
+            </button>
+          </p>
+        </div>
       </div>
+
+      <Footer />
     </div>
   );
 }
