@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Background from "./components/background";
 import { setServerBase } from './utils/config';
@@ -40,6 +40,26 @@ export default function Home() {
   const [responseGet, setResponseGet] = useState("");
 
   const [showServer, setShowServer] = useState(false);
+
+  const audioRef = useRef(null);
+
+  useEffect(() => {
+    // Create audio element and play on mount
+    audioRef.current = new Audio("/sounds/bongii.mp3");
+    audioRef.current.loop = true;
+    audioRef.current.volume = 0.7;
+    audioRef.current.play().catch(() => {
+      // Some browsers block autoplay, handle gracefully
+    });
+
+    return () => {
+      // Cleanup on unmount
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     setIsFormValid(firstName && lastName && regUsername && regPassword);
