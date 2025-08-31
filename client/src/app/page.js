@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Background from "./components/background";
+import { setServerBase } from './utils/config';
 import Footer from "./components/footer";
 import { motion, AnimatePresence } from "framer-motion";
 import { Upload, Play, ArrowLeft } from "lucide-react";
@@ -11,6 +12,15 @@ import { campaignService } from "./services/campaignService";
 import { profileService } from "./services/profileService";
 
 export default function Home() {
+
+  const [server, setServer] = useState('production');
+
+  const handleServerChange = (e) => {
+    const selected = e.target.value;
+    setServer(selected);
+    setServerBase(selected); // updates the shared server path
+  };
+
   const router = useRouter();
   const [step, setStep] = useState("main"); // "main" | "play" | "create-login" | "create-register"
   const [campaignCode, setCampaignCode] = useState("");
@@ -28,6 +38,8 @@ export default function Home() {
   const [profileIcon, setProfileIcon] = useState("1");
   const [isFormValid, setIsFormValid] = useState(false);
   const [responseGet, setResponseGet] = useState("");
+
+  const [showServer, setShowServer] = useState(false);
 
   useEffect(() => {
     setIsFormValid(firstName && lastName && regUsername && regPassword);
@@ -77,31 +89,6 @@ export default function Home() {
     }
   };
 
-  // --- REGISTER ---
-  const handleRegister = async () => {
-    if (!isFormValid) return;
-
-    const response = await userService.addUser(
-      firstName,
-      lastName,
-      regUsername,
-      regPassword,
-      email,
-      profileIcon
-    );
-
-    if (response.ok) {
-      const loginResponse = await userService.loginUser(regUsername, regPassword);
-      if (loginResponse.ok) {
-        const data = await loginResponse.json();
-        localStorage.setItem("token", data.token);
-        router.push("/home");
-      }
-    } else {
-      alert("Username already exists");
-    }
-  };
-
   return (
     <div className="relative min-h-screen flex flex-col">
       <Background />
@@ -116,6 +103,7 @@ export default function Home() {
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   className="flex justify-center items-center mb-20"
+                  onClick={() => setShowServer(!showServer)}
                 >
                   <img src="/logo.png" alt="App Logo" className="h-25 object-contain" />
                 </motion.div>
@@ -141,7 +129,16 @@ export default function Home() {
                   <Upload className="w-6 h-6" />
                   <span className="text-lg font-semibold">Create</span>
                 </motion.button>
+
+              {/* Server */}
+              {showServer && <div><h1 className="text-2xl font-bold mb-4">Select Server</h1>
+              <select value={server} onChange={handleServerChange} className="p-2 border rounded">
+                <option value="production">Bongii (https://bongii.fly.dev)</option>
+                <option value="localhost">Localhost (http://localhost:3001)</option>
+              </select>
+            </div>}
               </>
+              
             )}
           </AnimatePresence>
 
@@ -238,165 +235,6 @@ export default function Home() {
                       Login
                     </button>
                   </div>
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          {/* ---------- CREATE REGISTER FLOW ---------- */}
-          <AnimatePresence>
-            {step === "create-register" && (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                className="space-y-6"
-              >
-                <div className="bg-black/30 backdrop-blur-sm rounded-3xl p-8 border-2 border-white/20 shadow-2xl text-left">
-                  <div className="flex justify-start mb-6">
-                    <button
-                      onClick={() => setStep("main")}
-                      className="flex items-center text-white bg-white/10 hover:bg-white/20 px-4 py-2 rounded-xl border-2 border-white/30 hover:border-white/50 transition-all"
-                    >
-                      <ArrowLeft className="w-5 h-5 mr-2" />
-                      <span className="font-medium">Back</span>
-                    </button>
-                  </div>
-
-                  <h2 className="text-2xl font-bold text-white mb-6">
-                    Register a new account
-                  </h2>
-
-                  {/* Profile Icons */}
-                  <div className="mb-6">
-                    <label className="block text-sm font-medium text-white mb-2">
-                      Select Profile Icon <span className="text-red-500">*</span>
-                    </label>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      {["1", "2", "3", "4"].map((id) => (
-                        <div
-                          key={id}
-                          onClick={() => setProfileIcon(id)}
-                          className={`cursor-pointer p-2 rounded-lg border-2 ${
-                            profileIcon === id ? "border-red-500" : "border-gray-600"
-                          }`}
-                        >
-                          <div className="w-full aspect-square rounded overflow-hidden">
-                            <img
-                              src={`/icon-${id}.png`}
-                              alt={`Profile Icon ${id}`}
-                              className="w-full h-full object-cover hover:scale-105 transition-transform"
-                            />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* First + Last Name */}
-                  <div className="flex space-x-4 mb-4">
-                    <div className="flex-1">
-                      <label className="block text-sm font-medium text-white mb-1">
-                        First Name <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={firstName}
-                        onChange={(e) => setFirstName(e.target.value)}
-                        className="w-full px-4 py-3 rounded-xl bg-green-900/70 text-white placeholder-gray-300 border-3 border-white/30 focus:border-green-400 focus:ring-2 focus:ring-green-500 transition-all"
-                        placeholder="Enter first name"
-                      />
-                    </div>
-                    <div className="flex-1">
-                      <label className="block text-sm font-medium text-white mb-1">
-                        Last Name <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="text"
-                        value={lastName}
-                        onChange={(e) => setLastName(e.target.value)}
-                        className="w-full px-4 py-3 rounded-xl bg-green-900/70 text-white placeholder-gray-300 border-3 border-white/30 focus:border-green-400 focus:ring-2 focus:ring-green-500 transition-all"
-                        placeholder="Enter last name"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Username */}
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-white mb-1">
-                      Username <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={regUsername}
-                      onChange={(e) => setRegUsername(e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl bg-green-900/70 text-white placeholder-gray-300 border-3 border-white/30 focus:border-green-400 focus:ring-2 focus:ring-green-500 transition-all"
-                      placeholder="Enter username"
-                    />
-                  </div>
-
-                  {/* Password */}
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-white mb-1">
-                      Password <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="password"
-                      value={regPassword}
-                      onChange={(e) => setRegPassword(e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl bg-green-900/70 text-white placeholder-gray-300 border-3 border-white/30 focus:border-green-400 focus:ring-2 focus:ring-green-500 transition-all"
-                      placeholder="Enter password"
-                    />
-                  </div>
-
-                  {/* Email */}
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-white mb-1">
-                      Email (optional)
-                    </label>
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl bg-green-900/70 text-white placeholder-gray-300 border-3 border-white/30 focus:border-green-400 focus:ring-2 focus:ring-green-500 transition-all"
-                      placeholder="Enter email"
-                    />
-                  </div>
-
-                  {/* Buttons */}
-                  <div className="flex justify-between items-center mt-6">
-                    <button
-                      onClick={() => setStep("create-login")}
-                      className="text-sm text-gray-300 underline hover:text-white transition-colors font-medium"
-                    >
-                      Already have an account?
-                    </button>
-                    <div className="space-x-4">
-                      <button
-                        type="button"
-                        onClick={() => setStep("main")}
-                        className="px-4 py-2 rounded-md bg-gradient-to-b from-red-500 to-red-600 text-white"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleRegister}
-                        disabled={!isFormValid}
-                        className={`px-4 py-2 rounded-md transition-colors ${
-                          isFormValid
-                            ? "bg-gradient-to-b from-green-400 to-green-500 hover:bg-green-600 text-white"
-                            : "bg-gray-500 text-gray-300 cursor-not-allowed"
-                        }`}
-                      >
-                        Register
-                      </button>
-                    </div>
-                  </div>
-
-                  <label className="block text-sm font-medium text-red-400 mt-4">
-                    {responseGet}
-                  </label>
                 </div>
               </motion.div>
             )}

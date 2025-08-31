@@ -1,14 +1,14 @@
-const serverPath = "http://localhost:3001/api";
+import { getServerPath } from '../utils/config';
 
 export const userService = {
 
   async getUsers() {
-    const res = await fetch(serverPath + '/users');
+    const res = await fetch(`${getServerPath()}/users`);
     return Promise.resolve(res.json());
   },
 
   async addUser(firstName, lastName, username, password, email, profileIcon) {
-    const res = await fetch(serverPath + '/users', {
+    const res = await fetch(`${getServerPath()}/users`, {
       method: "POST",
       body: JSON.stringify({
         firstName: firstName,
@@ -27,7 +27,7 @@ export const userService = {
   },
 
   async loginUser(username, password) {
-    const res = await fetch(serverPath + '/login', {
+    const res = await fetch(`${getServerPath()}/login`, {
       method: "POST",
       body: JSON.stringify({
         username: username,

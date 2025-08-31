@@ -1,11 +1,11 @@
-const serverPath = "http://localhost:3001/api";
+import { getServerPath } from '../utils/config';
 
 export const campaignService = {
 
   // Check if a campaign exists by code
   async validateCampaign(code) {
     try {
-      const response = await fetch(`${serverPath}/campaigns/validate/${code}`, {
+      const response = await fetch(`${getServerPath()}/campaigns/validate/${code}`, {
         method: 'GET',
         headers: {
           "Content-type": "application/json; charset=UTF-8",
@@ -28,7 +28,7 @@ export const campaignService = {
   // Get campaign details by code
   async getCampaign(code) {
     try {
-      const response = await fetch(`${serverPath}/campaigns/${code}`, {
+      const response = await fetch(`${getServerPath()}/campaigns/${code}`, {
         method: 'GET',
         headers: {
           "Content-type": "application/json; charset=UTF-8",
@@ -44,7 +44,7 @@ export const campaignService = {
 
  // Create a new Bongii campaign
   async createCampaign(payload) {
-    const res = await fetch(serverPath + '/campaigns', {
+    const res = await fetch(`${getServerPath()}/campaigns`, {
       method: "POST",
       body: JSON.stringify({
         title: payload.title,
@@ -64,7 +64,7 @@ export const campaignService = {
 
   // Create a player board for a campaign
   async createPlayerBoard(payload) {
-  const res = await fetch(`${serverPath}/campaigns/${payload.campaignCode}/board`, {
+  const res = await fetch(`${getServerPath()}/campaigns/${payload.campaignCode}/board`, {
     method: "POST",
     body: JSON.stringify({
       playerName: payload.playerName,
@@ -83,7 +83,7 @@ export const campaignService = {
   // Get player board by unique board code
   async getPlayerBoard(boardCode) {
     try {
-      const response = await fetch(`${serverPath}/boards/${boardCode}`, {
+      const response = await fetch(`${getServerPath()}/boards/${boardCode}`, {
         method: 'GET',
         headers: {
           "Content-type": "application/json; charset=UTF-8",
@@ -98,7 +98,7 @@ export const campaignService = {
 
   // Update player board tiles
   async updatePlayerBoard(boardCode, payload) {
-    const res = await fetch(serverPath + `/boards/${boardCode}`, {
+    const res = await fetch(`${getServerPath()}/boards/${boardCode}`, {
       method: "PUT",
       body: JSON.stringify({
         tiles: payload.tiles, // array of tile updates
@@ -115,7 +115,7 @@ export const campaignService = {
 
   // Start campaign (moderator only)
   async startCampaign(campaignCode) {
-    const res = await fetch(serverPath + `/campaigns/${campaignCode}/start`, {
+    const res = await fetch(`${getServerPath()}/campaigns/${campaignCode}/start`, {
       method: "POST",
       headers: {
         "Content-type": "application/json; charset=UTF-8",
@@ -128,7 +128,7 @@ export const campaignService = {
 
   // Call item correct/incorrect (moderator only)
   async callCampaignItem(campaignCode, itemId, status) {
-    const res = await fetch(serverPath + `/campaigns/${campaignCode}/call`, {
+    const res = await fetch(`${getServerPath()}/campaigns/${campaignCode}/call`, {
       method: "POST",
       body: JSON.stringify({
         itemId: itemId,
@@ -146,7 +146,7 @@ export const campaignService = {
   // Get campaign results/winners
   async getCampaignResults(campaignCode) {
     try {
-      const response = await fetch(`${serverPath}/campaigns/${campaignCode}/results`, {
+      const response = await fetch(`${getServerPath()}/campaigns/${campaignCode}/results`, {
         method: 'GET',
         headers: {
           "Content-type": "application/json; charset=UTF-8",
@@ -162,7 +162,7 @@ export const campaignService = {
 
   // Delete campaign
   async deleteCampaign(code) {
-    const res = await fetch(serverPath + `/campaigns/${code}`, {
+    const res = await fetch(`${getServerPath()}/campaigns/${code}`, {
       method: "DELETE",
       headers: {
         "Content-type": "application/json; charset=UTF-8",
@@ -175,7 +175,7 @@ export const campaignService = {
 
   // Get user's campaigns
   async getUserCampaigns() {
-    const res = await fetch(serverPath + '/campaigns/user', {
+    const res = await fetch(`${getServerPath()}/campaigns/user`, {
       method: "GET",
       headers: {
         "Content-type": "application/json; charset=UTF-8",
@@ -189,7 +189,7 @@ export const campaignService = {
   // Get background presets
   async getBackgroundPresets() {
     try {
-      const response = await fetch(`${serverPath}/background-presets`, {
+      const response = await fetch(`${getServerPath()}/background-presets`, {
         method: 'GET',
         headers: {
           "Content-type": "application/json; charset=UTF-8",

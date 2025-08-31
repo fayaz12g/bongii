@@ -1,10 +1,10 @@
-const serverPath = "http://localhost:3001/api";
+import { getServerPath } from '../utils/config';
 
 export const profileService = {
 
 
   async getUserData() {
-    const res = await fetch(serverPath + '/users/current', {
+    const res = await fetch(`${getServerPath()}/users/current`, {
       method: "GET",
       headers: {
         "Authorization": `Bearer ${localStorage.getItem("token")}`
@@ -15,7 +15,7 @@ export const profileService = {
   },
 
   async updateUserData(userData) {
-    const res = await fetch(serverPath + '/users/current', {
+    const res = await fetch(`${getServerPath()}/users/current`, {
       method: "PUT",
       body: JSON.stringify({
         firstName: userData.firstName,
