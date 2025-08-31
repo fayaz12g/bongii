@@ -6,6 +6,41 @@ Host a campaign, invite others with a code, and enjoy bingo like never before—
 
 ---
 
+# 🚧 Development Tracker
+
+Here’s the current state of Bongii’s development.  
+✅ = Completed | ⬜ = In Progress / Not Yet Implemented  
+
+## ✅ Completed
+- ✅ User accounts (registration & login with JWT local storage)  
+- ✅ Frontend deployed on **Vercel**  
+- ✅ Backend deployed on **Fly.io**  
+- ✅ Persistent volume mounts for database storage  
+- ✅ Create a campaign  
+- ✅ Share campaign code for others to join  
+- ✅ Create a board within a campaign  
+- ✅ Share board code  
+- ✅ Account profile settings  
+- ✅ Background music on the title screen  
+
+## ⬜ In Progress / To-Do
+- ⬜ Browse available campaigns  
+- ⬜ Google Sign-In integration  
+- ⬜ Live moderation & real-time board updates  
+- ⬜ Theme color customization  
+- ⬜ Background music customization (beyond title screen)  
+
+---
+
+## 📊 Overall Progress
+**70% Complete**  
+```
+███████████░░░░░░░░
+```
+(9 of 14 features complete)  
+
+---
+
 ## ✨ Features
 - 🏆 **Custom Campaigns** – Create your own bingo campaign with unique categories and items.  
 - 🔗 **Easy Sharing** – Share a campaign code so others can join instantly.  
