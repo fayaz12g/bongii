@@ -8,7 +8,7 @@ const app = express();
 const router = express.Router();
 const database = require('./database');
 
-const PORT = 3001;
+const PORT = 3000;
 
 app.use(cors());
 app.use(express.json());
