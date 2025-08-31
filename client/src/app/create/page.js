@@ -34,6 +34,8 @@ export default function CreateCampaign() {
   const [boardSize, setBoardSize] = useState(3);
   const [startDate, setStartDate] = useState("");
   const [startTime, setStartTime] = useState("");
+
+  const [timeZone, setTimeZone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone);
   
   // Categories
   const [categories, setCategories] = useState([]);
@@ -93,7 +95,8 @@ export default function CreateCampaign() {
         title,
         backgroundPreset: selectedPreset.id,
         boardSize,
-        startDateTime: `${startDate}T${startTime}:00Z`,
+        startDateTime: new Date(`${startDate}T${startTime}:00`).toLocaleString("sv", { timeZone: "UTC" }),
+        timeZone,
         categories: categories.map(cat => ({
           name: cat.name,
           type: cat.type,
@@ -107,7 +110,7 @@ export default function CreateCampaign() {
         const data = await response.json();
         // Show success with campaign code
         alert(`Campaign created! Your code is: ${data.campaign.code}`);
-        router.push(`/profile`); // Redirect to profile to see campaigns
+        router.push(`/${data.campaign.code}`); // Redirect to build a board there
       } else {
         alert("Error creating campaign. Please try again.");
       }
@@ -138,8 +141,10 @@ export default function CreateCampaign() {
   };
 
   return (
+
+  <div className={`w-full h-100 rounded-2xl border-2 border-white/30 bg-gradient-to-r ${selectedPreset.gradient} shadow-inner`}>
     <div className="relative min-h-screen flex flex-col">
-      {/* <Background /> */}
+
       <div className="flex-1 px-6 py-8">
         <div className="max-w-4xl mx-auto">
           {/* Header */}
@@ -265,6 +270,19 @@ export default function CreateCampaign() {
                   </div>
                 </div>
 
+                <div>
+                <label className="block text-white font-semibold mb-2">Time Zone</label>
+                <select
+                  value={timeZone}
+                  onChange={(e) => setTimeZone(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl bg-white/10 text-white border-3 border-white/30 focus:border-blue-400 focus:ring-2 focus:ring-blue-500 transition-all"
+                >
+                  {Intl.supportedValuesOf("timeZone").map((tz) => (
+                    <option key={tz} value={tz}>{tz}</option>
+                  ))}
+                </select>
+              </div>
+
                 {/* Next Button */}
                 <div className="flex justify-end">
                   <motion.button
@@ -344,15 +362,30 @@ export default function CreateCampaign() {
                     </div>
                     <div>
                       <label className="block text-white font-semibold mb-2">Category Type</label>
-                      <select
-                        value={newCategoryType}
-                        onChange={(e) => setNewCategoryType(e.target.value)}
-                        className="w-full px-4 py-3 rounded-xl bg-white/10 text-white border-3 border-white/30 focus:border-green-400 focus:ring-2 focus:ring-green-500 transition-all"
-                      >
-                        <option value="choose_many">Choose Many</option>
-                        <option value="choose_one_required">Choose One (Required)</option>
-                        <option value="choose_one_optional">Choose One (Optional)</option>
-                      </select>
+                      <div className="flex items-center gap-4 mb-2">
+                        <label className="text-white font-semibold">Selection Type:</label>
+                        <select
+                          value={newCategoryType}
+                          onChange={(e) => setNewCategoryType(e.target.value)}
+                          className="px-3 py-2 rounded-xl bg-white/10 text-white border-2 border-white/30"
+                        >
+                          <option value="choose_many">Select Many</option>
+                          <option value="choose_one">Select One</option>
+                        </select>
+
+                        <label className="flex items-center gap-2 text-white">
+                          <input
+                            type="checkbox"
+                            checked={newCategoryType.includes("required")}
+                            onChange={(e) => {
+                              const baseType = newCategoryType.includes("choose_many") ? "choose_many" : "choose_one";
+                              setNewCategoryType(e.target.checked ? `${baseType}_required` : baseType);
+                            }}
+                            className="accent-green-500"
+                          />
+                          Required
+                        </label>
+                      </div>
                     </div>
                   </div>
 
@@ -505,6 +538,7 @@ export default function CreateCampaign() {
         </div>
       </div>
       <Footer />
+    </div>
     </div>
   );
 }

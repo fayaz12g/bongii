@@ -40,7 +40,8 @@ export const campaignService = {
       throw error;
     }
   },
-  
+
+
  // Create a new Bongii campaign
   async createCampaign(payload) {
     const res = await fetch(serverPath + '/campaigns', {
@@ -62,21 +63,22 @@ export const campaignService = {
   },
 
   // Create a player board for a campaign
-  async createPlayerBoard(campaignCode, payload) {
-    const res = await fetch(serverPath + `/campaigns/${campaignCode}/board`, {
-      method: "POST",
-      body: JSON.stringify({
-        playerName: payload.playerName,
-        selectedTiles: payload.selectedTiles, // array of {categoryItemId, position}
-      }),
-      headers: {
-        "Content-type": "application/json; charset=UTF-8",
-        "Authorization": `Bearer ${localStorage.getItem("token")}`
-      }
-    });
+  async createPlayerBoard(payload) {
+  const res = await fetch(`${serverPath}/campaigns/${payload.campaignCode}/board`, {
+    method: "POST",
+    body: JSON.stringify({
+      playerName: payload.playerName,
+      selectedTiles: payload.selectedTiles
+    }),
+    headers: {
+      "Content-type": "application/json; charset=UTF-8",
+      "Authorization": `Bearer ${localStorage.getItem("token")}`
+    }
+  });
 
-    return Promise.resolve(res);
-  },
+  return res;
+},
+
 
   // Get player board by unique board code
   async getPlayerBoard(boardCode) {

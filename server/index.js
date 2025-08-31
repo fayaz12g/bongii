@@ -190,53 +190,52 @@ router.route('/campaigns').post(verifyToken, async (req, res) => {
   }
 });
 
-// Create player board for a campaign
-router.route('/campaigns/:code/board').post(verifyToken, async (req, res) => {
+// Create player board for a campaign (anonymous)
+router.route('/campaigns/:code/board').post(async (req, res) => {
   try {
-    const currentUser = await database.getUserByUsername(req.user.username);
     const campaign = await database.getCampaignByCode(req.params.code);
     
     if (!campaign) {
       return res.status(404).json({ error: "Campaign Not Found" });
     }
-    
-    // Check if campaign has started
+
+    // Optional: check if campaign has started
     if (campaign.status === 'active') {
       return res.status(400).json({ error: "Campaign has already started" });
     }
-    
+
     const { playerName, selectedTiles } = req.body;
-    
-    // Create player board
+
+    // Create anonymous player board
     const boardData = {
       campaignId: campaign.id,
-      userId: currentUser.id,
-      playerName: playerName || currentUser.firstName || 'Player'
+      playerName: playerName || 'Player' // fallback name
     };
-    
+
     const board = await database.createPlayerBoard(boardData);
-    
-    // Add selected tiles to board
+
+    // Add selected tiles
     for (const tile of selectedTiles) {
       await database.addPlayerBoardTile({
         boardId: board.id,
-        categoryItemId: tile.categoryItemId,
+        categoryItemId: tile.categoryItemId || null,
         position: tile.position,
         isCenter: tile.isCenter || false,
         customText: tile.customText
       });
     }
-    
-    res.json({ 
-      success: true, 
+
+    res.json({
+      success: true,
       boardCode: board.boardCode,
-      message: "Board created successfully" 
+      message: "Board created successfully"
     });
   } catch (error) {
     console.error('Error creating player board:', error);
     res.status(500).json({ error: error.message });
   }
 });
+
 
 // Get player board by board code
 router.route('/boards/:boardCode').get(async (req, res) => {
@@ -383,49 +382,64 @@ router.route('/campaigns/:code').get(async (req, res) => {
   }
 });
 
-// Create new campaign
+// Create a new campaign
 router.route('/campaigns').post(verifyToken, async (req, res) => {
   try {
     const currentUser = await database.getUserByUsername(req.user.username);
-    const { name, description, gameSystem, setting, maxPlayers, isPrivate } = req.body;
-    
+    const { title, backgroundPreset, boardSize, startDateTime, categories } = req.body;
+
     // Generate unique 4-letter code
     let code;
     let isUnique = false;
     while (!isUnique) {
       code = generateCampaignCode();
       const existing = await database.getCampaignByCode(code);
-      if (!existing) {
-        isUnique = true;
+      if (!existing) isUnique = true;
+    }
+
+    // Create campaign
+    const campaignData = {
+      title,
+      backgroundPreset,
+      boardSize,
+      startDateTime,
+      createdBy: currentUser.id,
+      createdAt: new Date().toISOString(),
+      isActive: 1
+    };
+    const campaign = await database.createCampaign(campaignData);
+
+    // Insert categories and items
+    for (let i = 0; i < categories.length; i++) {
+      const cat = categories[i];
+      const categoryId = await database.createCategory({
+        campaignId: campaign.id,
+        name: cat.name,
+        type: cat.type,
+        required: cat.required ? 1 : 0,
+        orderIndex: i
+      });
+
+      for (let j = 0; j < cat.items.length; j++) {
+        const item = cat.items[j];
+        await database.createCategoryItem({
+          categoryId,
+          text: item.text,
+          orderIndex: j
+        });
       }
     }
+
+    // Return full campaign with categories & items
+    const fullCampaign = await database.getCampaignByCode(code);
+    res.status(201).json({ success: true, campaign: fullCampaign });
     
-    const campaignData = {
-      code,
-      name,
-      description,
-      gameSystem,
-      setting,
-      maxPlayers: maxPlayers || 6,
-      isPrivate: isPrivate || false,
-      createdBy: currentUser.id,
-      createdAt: new Date().toISOString()
-    };
-    
-    const campaign = await database.createCampaign(campaignData);
-    
-    res.status(201).json({
-      success: true,
-      campaign: {
-        ...campaign,
-        code: code
-      }
-    });
   } catch (error) {
     console.error('Error creating campaign:', error);
     res.status(500).json({ error: error.message });
   }
 });
+
 
 // Join campaign
 router.route('/campaigns/:code/join').post(verifyToken, async (req, res) => {

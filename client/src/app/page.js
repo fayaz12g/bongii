@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Upload, Play, ArrowLeft } from "lucide-react";
 import { userService } from "./services/userService";
 import { campaignService } from "./services/campaignService";
+import { profileService } from "./services/profileService";
 
 export default function Home() {
   const router = useRouter();
@@ -47,6 +48,22 @@ export default function Home() {
       alert("Please enter a 4-letter code.");
     }
   };
+
+    const handleCreateSubmit = async () => {
+    // Check if the token exists in localStorage
+    const token = localStorage.getItem('token');
+    console.log("Checking access");
+    profileService.getUserData().then(response => {
+        if (!response.ok) {
+          router.push('/login'); // Redirect to login page
+        }
+        else {
+          console.log("User has access");
+          router.push('/create'); // Redirect to create page
+        }
+    });
+  };
+
 
   // --- LOGIN ---
   const handleLogin = async () => {
@@ -119,7 +136,7 @@ export default function Home() {
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.97 }}
                   className="w-full bg-gradient-to-r from-green-400 to-green-500 text-white p-5 rounded-2xl shadow-lg flex items-center justify-center space-x-3 border-4 border-white/30 hover:border-white/50 transition-colors"
-                  onClick={() => setStep("create-login")}
+                   onClick={handleCreateSubmit}
                 >
                   <Upload className="w-6 h-6" />
                   <span className="text-lg font-semibold">Create</span>

@@ -104,13 +104,13 @@ const init = () => {
     CREATE TABLE IF NOT EXISTS playerBoards (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       campaignId INTEGER NOT NULL,
-      userId INTEGER NOT NULL,
+      userId INTEGER,  -- now nullable for anonymous boards
       playerName TEXT,
       boardCode TEXT UNIQUE NOT NULL, -- unique URL code for this board
       createdAt TEXT NOT NULL,
       FOREIGN KEY (campaignId) REFERENCES campaigns(id),
-      FOREIGN KEY (userId) REFERENCES users(id),
-      UNIQUE(campaignId, userId)
+      FOREIGN KEY (userId) REFERENCES users(id)
+      -- removed UNIQUE(campaignId, userId) because anonymous boards don't need it
     )
   `, (err) => {
     if (err) {
@@ -120,12 +120,13 @@ const init = () => {
     }
   });
 
+
   // Create a "playerBoardTiles" table, if it does not exist
   db.run(`
     CREATE TABLE IF NOT EXISTS playerBoardTiles (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       boardId INTEGER NOT NULL,
-      categoryItemId INTEGER NOT NULL,
+      categoryItemId INTEGER,
       position INTEGER NOT NULL, -- 0-8 for 3x3, 0-15 for 4x4, 0-24 for 5x5
       isCenter BOOLEAN DEFAULT 0, -- true for the free center space
       customText TEXT NULL, -- for when players enter their name in center
@@ -197,19 +198,6 @@ const init = () => {
         (4, 'Cherry Blossom', 'from-pink-300 via-purple-400 to-indigo-500', 'drift'),
         (5, 'Golden Hour', 'from-yellow-400 via-orange-500 to-red-600', 'pulse'),
         (6, 'Arctic Aurora', 'from-cyan-300 via-blue-400 to-indigo-600', 'shimmer');
-
-      -- Insert sample campaign data
-      INSERT OR IGNORE INTO campaigns (code, title, backgroundPreset, boardSize, startDateTime, createdBy, createdAt) VALUES 
-        ('TEST', 'Sample Bongii Game', 1, 3, '2025-09-15T19:00:00Z', 1, '2025-08-30T10:00:00Z');
-        gameSystem TEXT,
-        setting TEXT,
-        maxPlayers INTEGER DEFAULT 6,
-        isPrivate BOOLEAN DEFAULT 0,
-        createdBy INTEGER NOT NULL,
-        createdAt TEXT NOT NULL,
-        isActive BOOLEAN DEFAULT 1,
-        FOREIGN KEY (createdBy) REFERENCES users(id)
-      );
   `, (err) => {
     if (err) {
       console.error("Error doing extra logic:", err);
@@ -391,16 +379,6 @@ const createCampaign = (campaignData) => {
   return new Promise((resolve, reject) => {
     const { title, backgroundPreset, boardSize, startDateTime, categories, createdBy } = campaignData;
     
-    // Generate unique 4-letter code
-    const generateCode = () => {
-      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-      let code = '';
-      for (let i = 0; i < 4; i++) {
-        code += chars.charAt(Math.floor(Math.random() * chars.length));
-      }
-      return code;
-    };
-    
     const code = generateCode();
     const createdAt = new Date().toISOString();
     
@@ -565,29 +543,30 @@ const getBackgroundPreset = (presetId) => {
   });
 };
 
-// Create player board
+// Generate unique 4-letter code
+const generateCode = () => {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  let code = '';
+  for (let i = 0; i < 4; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+};
+
+
+// Create anonymous player board
 const createPlayerBoard = (boardData) => {
   console.log('Creating player board:', boardData);
   return new Promise((resolve, reject) => {
-    const { campaignId, userId, playerName } = boardData;
-    
-    // Generate unique board code
-    const generateBoardCode = () => {
-      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-      let code = '';
-      for (let i = 0; i < 8; i++) {
-        code += chars.charAt(Math.floor(Math.random() * chars.length));
-      }
-      return code;
-    };
-    
-    const boardCode = generateBoardCode();
+    const { campaignId, playerName } = boardData;
+
+    const boardCode = generateCode();
     const createdAt = new Date().toISOString();
-    
+
     db.run(
-      `INSERT INTO playerBoards (campaignId, userId, playerName, boardCode, createdAt) 
-       VALUES (?, ?, ?, ?, ?)`,
-      [campaignId, userId, playerName, boardCode, createdAt],
+      `INSERT INTO playerBoards (campaignId, playerName, boardCode, createdAt) 
+       VALUES (?, ?, ?, ?)`,
+      [campaignId, playerName, boardCode, createdAt],
       function(err) {
         if (err) {
           console.error('Error creating player board:', err);
@@ -596,7 +575,6 @@ const createPlayerBoard = (boardData) => {
           resolve({
             id: this.lastID,
             campaignId,
-            userId,
             playerName,
             boardCode,
             createdAt
