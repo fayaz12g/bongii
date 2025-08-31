@@ -9,7 +9,7 @@ const menuItemsBase = [
   { name: "Home", path: "/home" },
   { name: "Create", path: "/create" },
   { name: "Browse", path: "/browse" },
-  { name: "Campaigns", path: "/browse" },
+  { name: "Moderate", path: "/moderate" },
   { name: "Profile", path: "/profile" },
 ];
 
