@@ -6,9 +6,11 @@ import Footer from '../components/footer';
 
 const HomePage = () => {
   return (
-    <div className="relative min-h-screen bg-gray-900 text-white">
+    <div>
       <Header />
       <Background />
+      {/* <Footer /> */}
+      <br />
 
       <main className="max-w-5xl mx-auto p-6 mt-24">
         <div className="text-center">
