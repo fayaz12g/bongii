@@ -378,6 +378,55 @@ const getAllCampaigns = () => {
   });
 };
 
+// Get all boards with full related data
+const getAllBoards = () => {
+  console.log("Getting all boards");
+
+  return new Promise((resolve, reject) => {
+    db.all("SELECT * FROM playerBoards", async (err, boards) => {
+      if (err) {
+        console.error("Error getting all boards:", err);
+        return reject(err);
+      }
+
+      try {
+        const boardsWithDetails = await Promise.all(
+          boards.map(async (board) => {
+            // Get campaign info
+            const campaign = await new Promise((res, rej) => {
+              db.get("SELECT * FROM campaigns WHERE id = ?", [board.campaignId], (err, row) => {
+                if (err) return rej(err);
+                res(row);
+              });
+            });
+
+            // Get background preset for the campaign
+            const preset = campaign?.backgroundPreset
+              ? await getBackgroundPreset(campaign.backgroundPreset)
+              : null;
+
+            // Get player count for the campaign
+            const playerCount = await getCampaignPlayerCount(board.campaignId);
+
+            return {
+              ...board,
+              campaignTitle: campaign?.title || "Unknown Campaign",
+              campaignBoardSize: campaign?.boardSize,
+              backgroundPreset: preset,
+              playerCount,
+            };
+          })
+        );
+
+        console.log("Found boards with details:", boardsWithDetails);
+        resolve(boardsWithDetails);
+      } catch (error) {
+        console.error("Error assembling full board data:", error);
+        reject(error);
+      }
+    });
+  });
+};
 
 // Get a campaign by code with all related data
 const getCampaignByCode = (code) => {
@@ -674,31 +723,52 @@ const createPlayerBoard = (boardData) => {
 const getPlayerBoardByCode = (boardCode) => {
   return new Promise((resolve, reject) => {
     db.get(
-      `SELECT pb.*, c.title as campaignTitle, c.boardSize, c.backgroundPreset, c.startDateTime, c.status as campaignStatus
+      `SELECT pb.*, c.title as campaignTitle, c.boardSize, c.backgroundPreset as presetId, c.startDateTime, c.status as campaignStatus
        FROM playerBoards pb 
        JOIN campaigns c ON pb.campaignId = c.id 
        WHERE pb.boardCode = ?`,
       [boardCode],
       async (err, board) => {
         if (err) {
-          console.error('Error getting player board by code:', err);
-          reject(err);
-        } else if (board) {
-          try {
-            // Get board tiles
-            const tiles = await getPlayerBoardTiles(board.id);
-            board.tiles = tiles;
+          console.error("Error getting player board by code:", err);
+          return reject(err);
+        }
+
+        if (!board) return resolve(null);
+
+        try {
+          // Get board tiles
+          const tiles = await getPlayerBoardTiles(board.id);
+          board.tiles = tiles;
+
+          // Get full backgroundPreset object
+          if (board.presetId) {
+            db.get(
+              `SELECT id, name, gradient, animation FROM backgroundPresets WHERE id = ?`,
+              [board.presetId],
+              (err, preset) => {
+                if (err) {
+                  console.error("Error fetching background preset:", err);
+                  return reject(err);
+                }
+
+                board.backgroundPreset = preset || null;
+                resolve(board);
+              }
+            );
+          } else {
+            board.backgroundPreset = null;
             resolve(board);
-          } catch (tileError) {
-            reject(tileError);
           }
-        } else {
-          resolve(null);
+        } catch (tileError) {
+          reject(tileError);
         }
       }
     );
   });
 };
+
+
 
 // Add player board tile
 const addPlayerBoardTile = (tileData) => {
@@ -866,5 +936,6 @@ module.exports = {
   getPlayerBoardByCode,
   addPlayerBoardTile,
   getPlayerBoardTiles,
-  deleteCampaign
+  deleteCampaign,
+  getAllBoards
 };

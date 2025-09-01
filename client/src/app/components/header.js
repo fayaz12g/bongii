@@ -8,7 +8,8 @@ import { profileService } from '../services/profileService';
 const menuItemsBase = [
   { name: "Home", path: "/home" },
   { name: "Create", path: "/create" },
-  { name: "Browse", path: "/browse" },
+  { name: "Boards", path: "/boards" },
+  { name: "Campaigns", path: "/browse" },
   { name: "Moderate", path: "/moderate" },
   { name: "Profile", path: "/profile" },
 ];

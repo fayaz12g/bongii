@@ -57,6 +57,22 @@ export const campaignService = {
     }
   },
 
+    // Get all boards
+  async getAllBoards() {
+    try {
+      const response = await fetch(`${getServerPath()}/boards`, {
+        method: 'GET',
+        headers: {
+          "Content-type": "application/json; charset=UTF-8",
+        },
+      });
+      return response;
+    } catch (error) {
+      console.error('Error fetching campaign:', error);
+      throw error;
+    }
+  },
+
  // Create a new Bongii campaign
   async createCampaign(payload) {
     const res = await fetch(`${getServerPath()}/campaigns`, {

@@ -279,7 +279,7 @@ const canFinalize = () => {
 
       if (response.ok) {
         const data = await response.json();
-        router.push(`/board/${data.boardCode}`);
+        router.push(`/boards/${data.boardCode}`);
       } else {
         alert("Error creating board. Please try again.");
       }
