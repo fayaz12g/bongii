@@ -1,4 +1,5 @@
 const sqlite3 = require('sqlite3').verbose();
+const { v4: uuidv4 } = require('uuid');
 
 const DB_FILE = "./test.db";
 
@@ -334,86 +335,120 @@ const getAllUsers = () => {
   });
 };
 
-// Get all campaigns
+// Get all campaigns with full related data
 const getAllCampaigns = () => {
   console.log('Getting all campaigns');
+
   return new Promise((resolve, reject) => {
-    db.all('SELECT * FROM campaigns', (err, campaigns) => {
+    db.all('SELECT * FROM campaigns WHERE isActive = 1', async (err, campaigns) => {
       if (err) {
         console.error('Error getting all campaigns:', err);
-        reject(err);
-      } else {
-        console.log('Found campaigns: ', campaigns);
-        resolve(campaigns);
+        return reject(err);
+      }
+
+      try {
+        // Map each campaign to a Promise that fetches its full data
+        const campaignsWithDetails = await Promise.all(
+          campaigns.map(async (campaign) => {
+            // Get background preset
+            const preset = await getBackgroundPreset(campaign.backgroundPreset);
+
+            // Get categories
+            const categories = await getCampaignCategories(campaign.id);
+
+            // Get player count
+            const playerCount = await getCampaignPlayerCount(campaign.id);
+
+            return {
+              ...campaign,
+              backgroundPreset: preset,
+              categories,
+              playerCount,
+            };
+          })
+        );
+
+        console.log('Found campaigns with details:', campaignsWithDetails);
+        resolve(campaignsWithDetails);
+      } catch (error) {
+        console.error('Error assembling full campaign data:', error);
+        reject(error);
       }
     });
   });
 };
+
 
 // Get a campaign by code with all related data
 const getCampaignByCode = (code) => {
   console.log('Getting campaign with code:', code);
+
   return new Promise((resolve, reject) => {
     db.get('SELECT * FROM campaigns WHERE code = ? AND isActive = 1', [code], async (err, campaign) => {
-      if (err) {
-        console.error('Error getting campaign by code:', err);
-        reject(err);
-      } else if (campaign) {
-        try {
-          // Get categories and their items
-          const categories = await getCampaignCategories(campaign.id);
-          // Get background preset
-          const preset = await getBackgroundPreset(campaign.backgroundPreset);
-          // Get player count
-          const playerCount = await getCampaignPlayerCount(campaign.id);
-          
-          campaign.categories = categories;
-          campaign.backgroundPreset = preset;
-          campaign.playerCount = playerCount;
-          
-          resolve(campaign);
-        } catch (error) {
-          reject(error);
-        }
-      } else {
-        resolve(null);
+      if (err) return reject(err);
+      if (!campaign) return resolve(null);
+
+      try {
+        // Get categories and their items
+        const categories = await getCampaignCategories(campaign.id);
+
+        // Get background preset by id
+        const preset = await getBackgroundPreset(campaign.backgroundPreset);
+
+        // Get player count
+        const playerCount = await getCampaignPlayerCount(campaign.id);
+
+        campaign.categories = categories;
+        campaign.backgroundPreset = preset; // full preset object
+        campaign.playerCount = playerCount;
+
+        resolve(campaign);
+      } catch (error) {
+        reject(error);
       }
     });
   });
 };
 
-// Create a new campaign with categories
-const createCampaign = (campaignData) => {
+
+// Create a new campaign
+const createCampaign = async (campaignData) => {
   console.log('Creating campaign:', campaignData);
-  return new Promise((resolve, reject) => {
-    const { title, backgroundPreset, boardSize, startDateTime, categories, createdBy } = campaignData;
-    
+
+  const { title, backgroundPreset, boardSize, startDateTime, categories, createdBy } = campaignData;
+
+  try {
+    // Save the background preset and get the full object
+    const savedPreset = await saveBackgroundPreset(backgroundPreset);
+
     const code = generateCode();
     const createdAt = new Date().toISOString();
-    
-    db.run(
-      `INSERT INTO campaigns (code, title, backgroundPreset, boardSize, startDateTime, createdBy, createdAt, isActive) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
-      [code, title, backgroundPreset, boardSize, startDateTime, createdBy, createdAt],
-      async function(err) {
-        if (err) {
-          console.error('Error creating campaign:', err);
-          reject(err);
-        } else {
+
+    return new Promise((resolve, reject) => {
+      db.run(
+        `INSERT INTO campaigns (code, title, backgroundPreset, boardSize, startDateTime, createdBy, createdAt, isActive)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 1)`,
+        [code, title, savedPreset.id, boardSize, startDateTime, createdBy, createdAt],
+        async function(err) {
+          if (err) {
+            console.error('Error creating campaign:', err);
+            return reject(err);
+          }
+
           const campaignId = this.lastID;
-          
+
           try {
-            // Add categories
+            // Insert categories and items
             for (let i = 0; i < categories.length; i++) {
               const category = categories[i];
               await createCampaignCategory(campaignId, category, i);
             }
-            
+
             resolve({
               id: campaignId,
               code,
               title,
-              backgroundPreset,
+              backgroundPreset: savedPreset,
               boardSize,
               startDateTime,
               createdBy,
@@ -423,10 +458,14 @@ const createCampaign = (campaignData) => {
             reject(categoryError);
           }
         }
-      }
-    );
-  });
+      );
+    });
+  } catch (presetError) {
+    console.error('Error saving background preset:', presetError);
+    throw presetError;
+  }
 };
+
 
 // Create campaign category
 const createCampaignCategory = (campaignId, categoryData, orderIndex) => {
@@ -490,6 +529,43 @@ const createCampaignCategoryItem = (categoryId, text, orderIndex) => {
     );
   });
 };
+
+// Save a background preset and return its id
+const saveBackgroundPreset = (preset) => {
+  return new Promise((resolve, reject) => {
+    // If id is 'custom', let SQLite auto-increment it
+    if (preset.id === 'custom') {
+      db.run(
+        `INSERT INTO backgroundPresets (name, gradient, animation) VALUES (?, ?, ?)`,
+        [preset.name, preset.gradient, preset.animation],
+        function(err) {
+          if (err) {
+            console.error('Error saving background preset:', err);
+            reject(err);
+          } else {
+            // Return the full preset with the new numeric id
+            resolve({ ...preset, id: this.lastID });
+          }
+        }
+      );
+    } else {
+      // If preset.id is numeric, insert it manually
+      db.run(
+        `INSERT INTO backgroundPresets (id, name, gradient, animation) VALUES (?, ?, ?, ?)`,
+        [preset.id, preset.name, preset.gradient, preset.animation],
+        function(err) {
+          if (err) {
+            console.error('Error saving background preset:', err);
+            reject(err);
+          } else {
+            resolve(preset);
+          }
+        }
+      );
+    }
+  });
+};
+
 
 // Get campaign categories with items
 const getCampaignCategories = (campaignId) => {
@@ -712,30 +788,41 @@ const updateCampaignCategoryItemStatus = (itemId, status) => {
 // Get user's campaigns (created campaigns only for Bongii)
 const getUserCampaigns = (userId) => {
   console.log('Getting campaigns for user:', userId);
+
   return new Promise((resolve, reject) => {
-    db.all(
-      `SELECT c.*, 
-        COUNT(pb.id) as playerCount,
-        bp.name as presetName,
-        bp.gradient as presetGradient
-       FROM campaigns c
-       LEFT JOIN playerBoards pb ON c.id = pb.campaignId
-       LEFT JOIN backgroundPresets bp ON c.backgroundPreset = bp.id
-       WHERE c.createdBy = ? AND c.isActive = 1
-       GROUP BY c.id
-       ORDER BY c.createdAt DESC`,
-      [userId],
-      (err, campaigns) => {
-        if (err) {
-          console.error('Error getting user campaigns:', err);
-          reject(err);
-        } else {
-          resolve(campaigns || []);
-        }
+    db.all('SELECT * FROM campaigns WHERE createdBy = ? AND isActive = 1 ORDER BY createdAt DESC', [userId], async (err, campaigns) => {
+      if (err) return reject(err);
+      if (!campaigns || campaigns.length === 0) return resolve([]);
+
+      try {
+        const enrichedCampaigns = await Promise.all(
+          campaigns.map(async (campaign) => {
+            // Get categories and items
+            const categories = await getCampaignCategories(campaign.id);
+
+            // Get full background preset object
+            const preset = await getBackgroundPreset(campaign.backgroundPreset);
+
+            // Get player count
+            const playerCount = await getCampaignPlayerCount(campaign.id);
+
+            return {
+              ...campaign,
+              categories,
+              backgroundPreset: preset, // full object with id, name, gradient, animation
+              playerCount
+            };
+          })
+        );
+
+        resolve(enrichedCampaigns);
+      } catch (error) {
+        reject(error);
       }
-    );
+    });
   });
 };
+
 
 // Delete a campaign by id
 const deleteCampaign = (campaignId) => {

@@ -2,12 +2,13 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Plus, X, Trash2, Calendar, Clock, Palette, Grid3X3, Square, SquareStack, Check } from "lucide-react";
 import Background from "../components/background";
 import { BackgroundProvider } from "../components/context";
 import Footer from "../components/footer";
 import { campaignService } from "../services/campaignService";
 import Header from "../components/header";
+import { ArrowLeft, Plus, X, Trash2, Calendar, Clock, Palette, Grid3X3, Square, SquareStack, Check, Sparkles, Wand2, ChevronLeft, ChevronRight } from "lucide-react";
+
 
 // Preset gradients and animations
 const backgroundPresets = [
@@ -33,10 +34,62 @@ export default function CreateCampaign() {
   // Campaign data
   const [title, setTitle] = useState("");
   const [selectedPreset, setSelectedPreset] = useState(backgroundPresets[3]);
+  const [themeMode, setThemeMode] = useState('preset');
   const [boardSize, setBoardSize] = useState(3);
   const [startDate, setStartDate] = useState("");
   const [startTime, setStartTime] = useState("");
   const [description, setDescription] = useState("");
+
+
+// Pre-validated gradient combinations that are guaranteed to work
+const validGradientCombinations = [
+  // Blues
+  { name: 'Ocean Blue', gradient: 'from-blue-400 via-blue-600 to-blue-800' },
+  { name: 'Sky Blue', gradient: 'from-sky-300 via-sky-500 to-sky-700' },
+  { name: 'Cyan Dream', gradient: 'from-cyan-300 via-blue-500 to-indigo-700' },
+  
+  // Purples
+  { name: 'Royal Purple', gradient: 'from-purple-400 via-purple-600 to-purple-800' },
+  { name: 'Violet Storm', gradient: 'from-violet-300 via-purple-500 to-indigo-700' },
+  { name: 'Mystic Purple', gradient: 'from-fuchsia-400 via-purple-500 to-indigo-600' },
+  
+  // Pinks
+  { name: 'Rose Garden', gradient: 'from-pink-300 via-pink-500 to-rose-600' },
+  { name: 'Flamingo', gradient: 'from-pink-400 via-rose-500 to-pink-700' },
+  { name: 'Sunset Pink', gradient: 'from-orange-300 via-pink-400 to-purple-600' },
+  
+  // Greens
+  { name: 'Forest Green', gradient: 'from-green-400 via-green-600 to-emerald-700' },
+  { name: 'Emerald Sea', gradient: 'from-emerald-300 via-teal-500 to-cyan-600' },
+  { name: 'Lime Fresh', gradient: 'from-lime-300 via-green-500 to-emerald-600' },
+  
+  // Warm Colors
+  { name: 'Sunset Glow', gradient: 'from-orange-400 via-pink-500 to-purple-600' },
+  { name: 'Fire Storm', gradient: 'from-red-400 via-orange-500 to-yellow-600' },
+  { name: 'Golden Hour', gradient: 'from-yellow-400 via-orange-500 to-red-600' },
+  
+  // Cool Colors
+  { name: 'Arctic Frost', gradient: 'from-cyan-200 via-blue-400 to-indigo-600' },
+  { name: 'Winter Sky', gradient: 'from-blue-200 via-indigo-400 to-purple-600' },
+  { name: 'Ice Crystal', gradient: 'from-cyan-300 via-sky-400 to-blue-500' }
+];
+
+// Custom theme settings
+const [customTheme, setCustomTheme] = useState({
+  name: "",
+  selectedGradient: validGradientCombinations[0].gradient,
+  gradientName: validGradientCombinations[0].name,
+  animation: 'wave'
+});
+
+const animationTypes = [
+  { id: 'wave', name: 'Wave', icon: '〜' },
+  { id: 'glow', name: 'Glow', icon: '✦' },
+  { id: 'float', name: 'Float', icon: '↕' },
+  { id: 'drift', name: 'Drift', icon: '→' },
+  { id: 'pulse', name: 'Pulse', icon: '◉' },
+  { id: 'shimmer', name: 'Shimmer', icon: '✨' }
+];
 
   // Background stuff
   const [showGradient, setShowGradient] = useState(true);
@@ -50,6 +103,20 @@ export default function CreateCampaign() {
   const [newCategoryType, setNewCategoryType] = useState("choose_many"); // choose_many, choose_one_required, choose_one_optional
   const [newCategoryItems, setNewCategoryItems] = useState([""]);
 
+// Use the custom theme if present
+useEffect(() => {
+  if (themeMode === 'custom') {
+    const customThemeObject = {
+      id: 'custom',
+      name: customTheme.name || 'Custom Theme',
+      gradient: getCustomGradient(),
+      animation: customTheme.animation
+    };
+    setSelectedPreset(customThemeObject);
+    console.log("Custom theme applied:", customThemeObject);
+  }
+}, [customTheme, themeMode]);
+
   useEffect(() => {
     // Check if user is logged in
     const token = localStorage.getItem("token");
@@ -57,6 +124,25 @@ export default function CreateCampaign() {
       router.push("/login");
     }
   }, [router]);
+
+  // Generate custom gradient string
+  const getCustomGradient = () => {
+    return customTheme.selectedGradient || validGradientCombinations[0].gradient;
+  };
+
+  // Get current theme (preset or custom)
+  const getCurrentTheme = () => {
+    if (themeMode === 'preset') {
+      return selectedPreset;
+    } else {
+      return {
+        id: 'custom',
+        name: customTheme.name || 'Custom Theme',
+        gradient: getCustomGradient(),
+        animation: customTheme.animation
+      };
+    }
+  };
 
   const addCategory = () => {
     if (newCategoryName.trim() && newCategoryItems.some(item => item.trim())) {
@@ -101,7 +187,7 @@ export default function CreateCampaign() {
       const campaignData = {
         title,
         description,
-        backgroundPreset: selectedPreset.id,
+        backgroundPreset: selectedPreset,
         boardSize,
         startDateTime: new Date(`${startDate}T${startTime}:00`).toLocaleString("sv", { timeZone: "UTC" }),
         timeZone,
@@ -158,8 +244,8 @@ export default function CreateCampaign() {
       <br />
       <br />
 
-      <div className="flex-1 px-6 py-8">
-        <div className="max-w-4xl mx-auto">
+      <div className="flex-1 px-6 py-8 flex items-center justify-center">
+        <div className="w-full max-w-4xl">
           {/* Header */}
           <div className="flex items-center justify-between mb-8">
             <div className="w-32"></div> {/* Spacer */}
@@ -167,7 +253,7 @@ export default function CreateCampaign() {
             <div className="text-center">
               <h1 className="text-3xl font-bold text-white mb-2">Create Campaign</h1>
               <div className="flex items-center space-x-2">
-                {[1, 2, 3].map((s) => (
+                {[1, 2, 3, 4].map((s) => (
                   <div
                     key={s}
                     className={`w-3 h-3 rounded-full ${
@@ -182,143 +268,290 @@ export default function CreateCampaign() {
           </div>
 
           {/* Step 1: Basic Information */}
-          <AnimatePresence mode="wait">
-            {step === 1 && (
-              <motion.div
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="bg-black/30 backdrop-blur-sm rounded-3xl p-8 border-2 border-white/20 shadow-2xl"
-              >
-                <h2 className="text-2xl font-bold text-white mb-6">Basic Information</h2>
-                
-                {/* Campaign Title */}
-                <div className="mb-6">
-                  <label className="block text-white font-semibold mb-2">Campaign Title</label>
-                  <input
-                    type="text"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="Enter your campaign title..."
-                    className="w-full px-4 py-3 rounded-xl bg-white/10 text-white placeholder-gray-300 border-3 border-white/30 focus:border-blue-400 focus:ring-2 focus:ring-blue-500 transition-all"
-                  />
-                </div>
+              <AnimatePresence mode="wait">
+                {step === 1 && (
+                  <div>
+                  <motion.div
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    className="bg-black/30 backdrop-blur-sm rounded-3xl p-8 border-2 border-white/20 shadow-2xl"
+                  >
+                    <h2 className="text-2xl font-bold text-white mb-6">Basic Information</h2>
+                    
+                    {/* Campaign Title */}
+                    <div className="mb-6">
+                      <label className="block text-white font-semibold mb-2">Campaign Title</label>
+                      <input
+                        type="text"
+                        value={title}
+                        onChange={(e) => setTitle(e.target.value)}
+                        placeholder="Enter your campaign title..."
+                        className="w-full px-4 py-3 rounded-xl bg-white/10 text-white placeholder-gray-300 border-3 border-white/30 focus:border-blue-400 focus:ring-2 focus:ring-blue-500 transition-all"
+                      />
+                    </div>
 
-                {/* Campaign Description */}
-                <div className="mb-6">
-                  <label className="block text-white font-semibold mb-2">Description</label>
-                  <textarea
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Briefly describe your campaign..."
-                    rows={3}
-                    className="w-full px-4 py-3 rounded-xl bg-white/10 text-white placeholder-gray-300 border-3 border-white/30 focus:border-blue-400 focus:ring-2 focus:ring-blue-500 transition-all"
-                  />
-                </div>
+                    {/* Campaign Description */}
+                    <div className="mb-6">
+                      <label className="block text-white font-semibold mb-2">Description</label>
+                      <textarea
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        placeholder="Briefly describe your campaign..."
+                        rows={3}
+                        className="w-full px-4 py-3 rounded-xl bg-white/10 text-white placeholder-gray-300 border-3 border-white/30 focus:border-blue-400 focus:ring-2 focus:ring-blue-500 transition-all"
+                      />
+                    </div>
 
-                {/* Background Preset */}
-                <div className="mb-6">
-                  <label className="block text-white font-semibold mb-4">Background Theme</label>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    {backgroundPresets.map((preset) => (
-                      <button
-                        key={preset.id}
-                        onClick={() => setSelectedPreset(preset)}
-                        className={`relative p-4 rounded-xl border-3 transition-all ${
-                          selectedPreset.id === preset.id
-                            ? "border-white scale-105"
-                            : "border-white/30 hover:border-white/50"
-                        }`}
+                    {/* Board Size */}
+                    <div className="mb-6">
+                      <label className="block text-white font-semibold mb-4">Board Size</label>
+                      <div className="flex space-x-4">
+                        {boardSizes.map((size) => {
+                          const IconComponent = size.icon;
+                          return (
+                            <button
+                              key={size.value}
+                              onClick={() => setBoardSize(size.value)}
+                              className={`flex-1 p-4 rounded-xl border-3 transition-all ${
+                                boardSize === size.value
+                                  ? "border-white bg-white/10 scale-105"
+                                  : "border-white/30 hover:border-white/50"
+                              }`}
+                            >
+                              <IconComponent className="w-8 h-8 text-white mx-auto mb-2" />
+                              <p className="text-white font-semibold">{size.size}</p>
+                              <p className="text-gray-300 text-sm">Goal: {size.goal}</p>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Start Date & Time */}
+                    <div className="grid md:grid-cols-2 gap-4 mb-8">
+                      <div>
+                        <label className="block text-white font-semibold mb-2">Start Date</label>
+                        <input
+                          type="date"
+                          value={startDate}
+                          onChange={(e) => setStartDate(e.target.value)}
+                          className="w-full px-4 py-3 rounded-xl bg-white/10 text-white border-3 border-white/30 focus:border-blue-400 focus:ring-2 focus:ring-blue-500 transition-all"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-white font-semibold mb-2">Start Time</label>
+                        <input
+                          type="time"
+                          value={startTime}
+                          onChange={(e) => setStartTime(e.target.value)}
+                          className="w-full px-4 py-3 rounded-xl bg-white/10 text-white border-3 border-white/30 focus:border-blue-400 focus:ring-2 focus:ring-blue-500 transition-all"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="mb-8">
+                      <label className="block text-white font-semibold mb-2">Time Zone</label>
+                      <select
+                        value={timeZone}
+                        onChange={(e) => setTimeZone(e.target.value)}
+                        className="w-full px-4 py-3 rounded-xl bg-white/10 text-white border-3 border-white/30 focus:border-blue-400 focus:ring-2 focus:ring-blue-500 transition-all"
                       >
-                        <div className={`w-full h-16 bg-gradient-to-r ${preset.gradient} rounded-lg mb-2`}></div>
-                        <p className="text-white text-sm font-medium">{preset.name}</p>
-                        {selectedPreset.id === preset.id && (
-                          <div className="absolute top-2 right-2">
-                            <Check className="w-5 h-5 text-white bg-green-500 rounded-full p-1" />
-                          </div>
-                        )}
-                      </button>
-                    ))}
+                        <option value="America/New_York">Eastern Time</option>
+                        <option value="America/Chicago">Central Time</option>
+                        <option value="America/Denver">Mountain Time</option>
+                        <option value="America/Los_Angeles">Pacific Time</option>
+                        <option value="UTC">UTC</option>
+                      </select>
+                    </div>
+                  </motion.div>
+                  
+                  <br />
+                
+                  {/* Next Button */}
+                  <div className="flex justify-end">
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.97 }}
+                      onClick={() => setStep(2)}
+                      disabled={!title || !startDate || !startTime}
+                      className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-8 py-3 rounded-xl font-semibold border-3 border-white/30 hover:border-white/50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                    >
+                      Next: Design Theme
+                      <ChevronRight className="w-5 h-5 ml-2 inline" />
+                    </motion.button>
                   </div>
                 </div>
+                )}
+                
+                {/* Step 2: Theme Design */}
+                {step === 2 && (
+                  <motion.div
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    className="space-y-6"
+                  >
+                    <div className="bg-black/30 backdrop-blur-sm rounded-3xl p-8 border-2 border-white/20 shadow-2xl">
+                      <div className="flex items-center mb-6">
+                        <Palette className="w-6 h-6 text-white mr-3" />
+                        <h2 className="text-2xl font-bold text-white">Choose Your Theme</h2>
+                      </div>
 
-                {/* Board Size */}
-                <div className="mb-6">
-                  <label className="block text-white font-semibold mb-4">Board Size</label>
-                  <div className="flex space-x-4">
-                    {boardSizes.map((size) => {
-                      const IconComponent = size.icon;
-                      return (
+                      {/* Theme Mode Selector */}
+                      <div className="flex mb-8">
                         <button
-                          key={size.value}
-                          onClick={() => setBoardSize(size.value)}
-                          className={`flex-1 p-4 rounded-xl border-3 transition-all ${
-                            boardSize === size.value
-                              ? "border-white bg-white/10 scale-105"
-                              : "border-white/30 hover:border-white/50"
+                          onClick={() => setThemeMode('preset')}
+                          className={`flex-1 flex items-center justify-center py-3 px-4 rounded-l-xl border-3 transition-all ${
+                            themeMode === 'preset'
+                              ? 'bg-white/20 border-white text-white'
+                              : 'bg-white/5 border-white/30 text-white/70 hover:border-white/50'
                           }`}
                         >
-                          <IconComponent className="w-8 h-8 text-white mx-auto mb-2" />
-                          <p className="text-white font-semibold">{size.size}</p>
-                          <p className="text-gray-300 text-sm">Goal: {size.goal}</p>
+                          <Sparkles className="w-5 h-5 mr-2" />
+                          Preset Themes
                         </button>
-                      );
-                    })}
-                  </div>
-                </div>
+                        <button
+                          onClick={() => setThemeMode('custom')}
+                          className={`flex-1 flex items-center justify-center py-3 px-4 rounded-r-xl border-3 transition-all ${
+                            themeMode === 'custom'
+                              ? 'bg-white/20 border-white text-white'
+                              : 'bg-white/5 border-white/30 text-white/70 hover:border-white/50'
+                          }`}
+                        >
+                          <Wand2 className="w-5 h-5 mr-2" />
+                          Custom Theme
+                        </button>
+                      </div>
 
-                {/* Start Date & Time */}
-                <div className="grid md:grid-cols-2 gap-4 mb-8">
-                  <div>
-                    <label className="block text-white font-semibold mb-2">Start Date</label>
-                    <input
-                      type="date"
-                      value={startDate}
-                      onChange={(e) => setStartDate(e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl bg-white/10 text-white border-3 border-white/30 focus:border-blue-400 focus:ring-2 focus:ring-blue-500 transition-all"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-white font-semibold mb-2">Start Time</label>
-                    <input
-                      type="time"
-                      value={startTime}
-                      onChange={(e) => setStartTime(e.target.value)}
-                      className="w-full px-4 py-3 rounded-xl bg-white/10 text-white border-3 border-white/30 focus:border-blue-400 focus:ring-2 focus:ring-blue-500 transition-all"
-                    />
-                  </div>
-                </div>
+                      {/* Preset Themes */}
+                      {themeMode === 'preset' && (
+                        <div>
+                          <h3 className="text-white font-semibold mb-4">Choose a Preset</h3>
+                          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                            {backgroundPresets.map((preset) => (
+                              <button
+                                key={preset.id}
+                                onClick={() => setSelectedPreset(preset)}
+                                className={`relative p-4 rounded-xl border-3 transition-all ${
+                                  selectedPreset.id === preset.id
+                                    ? "border-white scale-105"
+                                    : "border-white/30 hover:border-white/50"
+                                }`}
+                              >
+                                <div className={`w-full h-16 bg-gradient-to-r ${preset.gradient} rounded-lg mb-2`}></div>
+                                <p className="text-white text-sm font-medium">{preset.name}</p>
+                                <p className="text-white/60 text-xs">{preset.animation}</p>
+                                {selectedPreset.id === preset.id && (
+                                  <div className="absolute top-2 right-2">
+                                    <Check className="w-5 h-5 text-white bg-green-500 rounded-full p-1" />
+                                  </div>
+                                )}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
-                <div>
-                <label className="block text-white font-semibold mb-2">Time Zone</label>
-                <select
-                  value={timeZone}
-                  onChange={(e) => setTimeZone(e.target.value)}
-                  className="w-full px-4 py-3 rounded-xl bg-white/10 text-white border-3 border-white/30 focus:border-blue-400 focus:ring-2 focus:ring-blue-500 transition-all"
-                >
-                  {Intl.supportedValuesOf("timeZone").map((tz) => (
-                    <option key={tz} value={tz}>{tz}</option>
-                  ))}
-                </select>
-              </div>
+                      {/* Custom Theme Builder */}
+                      {themeMode === 'custom' && (
+                        <div className="space-y-6">
+                          <div>
+                            <label className="block text-white font-semibold mb-2">Theme Name</label>
+                            <input
+                              type="text"
+                              value={customTheme.name}
+                              onChange={(e) => setCustomTheme({...customTheme, name: e.target.value})}
+                              placeholder="Enter a name for your theme..."
+                              className="w-full px-4 py-3 rounded-xl bg-white/10 text-white placeholder-gray-300 border-3 border-white/30 focus:border-purple-400 focus:ring-2 focus:ring-purple-500 transition-all"
+                            />
+                          </div>
 
-                {/* Next Button */}
-                <div className="flex justify-end">
-                  <motion.button
-                    whileHover={{ scale: 1.05 }}
-                    whileTap={{ scale: 0.97 }}
-                    onClick={() => setStep(2)}
-                    disabled={!title || !startDate || !startTime}
-                    className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-8 py-3 rounded-xl font-semibold border-3 border-white/30 hover:border-white/50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                  >
-                    Next: Add Categories
-                  </motion.button>
-                </div>
-              </motion.div>
-            )}
+                          <div>
+                            
+                            {/* Pre-crafted Custom Themes */}
+                            <div>
+                            <h4 className="text-white font-semibold mb-4">Choose a Gradient Style</h4>
+                            
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                              {validGradientCombinations.map((combo, index) => (
+                                <button
+                                  key={index}
+                                  onClick={() => setCustomTheme({
+                                    ...customTheme, 
+                                    selectedGradient: combo.gradient,
+                                    gradientName: combo.name
+                                  })}
+                                  className={`relative p-4 rounded-xl border-3 transition-all ${
+                                    customTheme.selectedGradient === combo.gradient
+                                      ? "border-white bg-white/10 scale-105"
+                                      : "border-white/30 hover:border-white/50"
+                                  }`}
+                                >
+                                  <div className={`w-full h-12 bg-gradient-to-r ${combo.gradient} rounded-lg mb-2`}></div>
+                                  <p className="text-white text-sm font-medium">{combo.name}</p>
+                                  {customTheme.selectedGradient === combo.gradient && (
+                                    <div className="absolute top-2 right-2">
+                                      <Check className="w-5 h-5 text-white bg-green-500 rounded-full p-1" />
+                                    </div>
+                                  )}
+                                </button>
+                              ))}
+                            </div>
 
-            {/* Step 2: Categories */}
-            {step === 2 && (
+                            {/* Animation Style */}
+                            <div>
+                              <label className="block text-white font-semibold mb-3">Animation Style</label>
+                              <div className="grid grid-cols-3 gap-3">
+                                {animationTypes.map((anim) => (
+                                  <button
+                                    key={anim.id}
+                                    onClick={() => setCustomTheme({...customTheme, animation: anim.id})}
+                                    className={`p-3 rounded-lg border-2 transition-all ${
+                                      customTheme.animation === anim.id
+                                        ? 'border-white bg-white/20 text-white'
+                                        : 'border-white/30 hover:border-white/50 text-white/70'
+                                    }`}
+                                  >
+                                    <div className="text-2xl mb-1">{anim.icon}</div>
+                                    <div className="text-sm font-medium">{anim.name}</div>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Navigation */}
+                    <div className="flex justify-between">
+                      <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.97 }}
+                        onClick={() => setStep(1)}
+                        className="bg-white/10 text-white px-6 py-3 rounded-xl font-semibold border-3 border-white/30 hover:border-white/50 transition-all"
+                      >
+                        <ChevronLeft className="w-5 h-5 mr-2 inline" />
+                        Back
+                      </motion.button>
+                      
+                      <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.97 }}
+                        onClick={() => setStep(3)}
+                        className="bg-gradient-to-r from-purple-500 to-purple-600 text-white px-8 py-3 rounded-xl font-semibold border-3 border-white/30 hover:border-white/50 transition-all"
+                      >
+                        Next: Add Categories
+                        <ChevronRight className="w-5 h-5 ml-2 inline" />
+                      </motion.button>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* Step 3: Categories */}
+            {step === 3 && (
               <motion.div
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}
@@ -465,7 +698,7 @@ export default function CreateCampaign() {
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.97 }}
-                    onClick={() => setStep(3)}
+                    onClick={() => setStep(4)}
                     disabled={categories.length === 0}
                     className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-8 py-3 rounded-xl font-semibold border-3 border-white/30 hover:border-white/50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                   >
@@ -475,8 +708,8 @@ export default function CreateCampaign() {
               </motion.div>
             )}
 
-            {/* Step 3: Review & Create */}
-            {step === 3 && (
+            {/* Step 4: Review & Create */}
+            {step === 4 && (
               <motion.div
                 initial={{ opacity: 0, x: 20 }}
                 animate={{ opacity: 1, x: 0 }}

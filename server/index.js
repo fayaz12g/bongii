@@ -171,7 +171,7 @@ router.route('/campaigns').post(verifyToken, async (req, res) => {
     
     const campaignData = {
       title,
-      backgroundPreset: backgroundPreset || 1,
+      backgroundPreset: backgroundPreset,
       boardSize: boardSize || 3,
       startDateTime,
       categories,

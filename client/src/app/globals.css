@@ -29,3 +29,67 @@ body {
   background-size: 200% 200%;
   animation: gradient-x 12s ease infinite;
 }
+
+@keyframes shimmer {
+  0%, 100% {
+    opacity: 0.85;
+    box-shadow: 0 0 6px rgba(255, 255, 255, 0.1);
+  }
+  50% {
+    opacity: 1;
+    box-shadow: 0 0 12px rgba(255, 255, 255, 0.15);
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 3s infinite ease-in-out;
+}
+
+@keyframes wave {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.animate-wave {
+  animation: wave 6s infinite ease-in-out;
+  background-size: 200% 100%;
+}
+
+@keyframes glow {
+  0%, 100% { opacity: 0.85; box-shadow: 0 0 6px rgba(255, 255, 255, 0.1); }
+  50% { opacity: 1; box-shadow: 0 0 12px rgba(255, 255, 255, 0.15); }
+}
+
+.animate-glow {
+  animation: glow 3s infinite ease-in-out;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-4px); }
+}
+
+.animate-float {
+  animation: float 4s infinite ease-in-out;
+}
+
+@keyframes drift {
+  0% { background-position: 0% 0%; }
+  50% { background-position: 50% 50%; }
+  100% { background-position: 0% 0%; }
+}
+
+.animate-drift {
+  animation: drift 8s infinite linear;
+  background-size: 200% 200%;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.03); }
+}
+
+.animate-pulse {
+  animation: pulse 3s infinite ease-in-out;
+}

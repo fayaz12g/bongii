@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Users, Calendar, MapPin, Check, X, Trash2, Play, Shuffle, User, Trophy } from "lucide-react";
 import Background from "../components/background";
 import { BackgroundProvider } from "../components/context";
+import Footer from "../components/footer";
 
 // Background presets (should match your create screen)
 const backgroundPresets = [
@@ -38,6 +39,7 @@ export default function CampaignPage() {
         const response = await campaignService.getCampaign(campaignCode);
         if (response.ok) {
           const data = await response.json();
+          console.log(data);
           setCampaign(data);
           initializeBoard(data.boardSize);
         } else if (response.status === 404) {
@@ -67,7 +69,8 @@ export default function CampaignPage() {
   };
 
   const getCurrentPreset = () => {
-    return backgroundPresets.find(preset => preset.id === campaign?.backgroundPreset?.id) || backgroundPresets[0];
+    // return backgroundPresets.find(preset => preset.id === campaign?.backgroundPreset?.id) || backgroundPresets[0];
+    return campaign.backgroundPreset;
   };
 
   const getGoal = (boardSize) => {
@@ -328,12 +331,10 @@ const canFinalize = () => {
     );
   }
 
-  const currentPreset = getCurrentPreset();
-
   return (
-    <div className={`min-h-screen bg-gradient-to-br ${currentPreset.gradient}`}>
-      <BackgroundProvider>
-          <Background preset={currentPreset} />
+    <div className={`min-h-screen`}>
+      <BackgroundProvider selectedPreset={campaign.backgroundPreset}>
+          <Background />
       <div className="container mx-auto px-6 py-8">
         {/* Header */}
         <div className="flex justify-between items-center mb-8">

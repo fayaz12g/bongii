@@ -19,6 +19,7 @@ export default function Browse() {
         return;
       }
       const data = await res.json();
+      console.log("Fetched campaigns:", data);
       setCampaigns(data);
     } catch (err) {
       console.error("Error loading campaigns:", err);
@@ -51,9 +52,17 @@ export default function Browse() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {campaigns.map((c) => (
-              <Link key={c.code} href={`/campaign/${c.code}`}>
+              <Link key={c.code} href={`/${c.code}`}>
                 <div className="bg-white/10 rounded-xl p-6 shadow-lg hover:bg-white/20 transition cursor-pointer">
-                  <h2 className="text-2xl font-semibold mb-2">{c.name}</h2>
+                  {/* Background preview box */}
+                  <div
+                    className={`w-full h-64 rounded-lg mb-4 bg-gradient-to-r ${
+                      c.backgroundPreset?.gradient || ""
+                    } ${c.backgroundPreset?.animation === "shimmer" ? "animate-shimmer" : ""}`}
+                  />
+
+                  {/* Campaign Details */}
+                  <h2 className="text-2xl font-semibold mb-2">{c.title}</h2>
                   <p className="text-gray-300 mb-2 line-clamp-3">
                     {c.description || "No description provided."}
                   </p>
