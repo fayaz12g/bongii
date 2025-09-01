@@ -6,7 +6,7 @@ const SERVER_ADDRESSES = {
 };
 
 // Default server
-let serverBase = SERVER_ADDRESSES.local;
+let serverBase = SERVER_ADDRESSES.prod;
 
 // Function to set server
 export const setServerBase = (env) => {
