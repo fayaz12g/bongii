@@ -5,6 +5,7 @@ import { profileService } from '../services/profileService';
 import Background from '../components/background';
 import Header from '../components/header';
 import Footer from '../components/footer';
+import { BackgroundProvider } from "../components/context";
 
 export default function ProfilePage() {
   const router = useRouter(); 
@@ -83,6 +84,7 @@ export default function ProfilePage() {
 
   return (
     <div>
+      <BackgroundProvider>
       <Header />
       <Background />
       {/* <Footer /> */}
@@ -196,6 +198,8 @@ export default function ProfilePage() {
           </form>
         </div>
       </div>
+      <Footer />
+      </BackgroundProvider>
     </div>
   );
 }

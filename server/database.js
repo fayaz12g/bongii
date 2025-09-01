@@ -1,6 +1,6 @@
 const sqlite3 = require('sqlite3').verbose();
 
-const DB_FILE = "/data/test.db";
+const DB_FILE = "./test.db";
 
 // Sqlite 3 Database
 let db;
@@ -58,6 +58,15 @@ const init = () => {
       console.error("Error creating campaigns table:", err);
     } else {
       console.log("Campaigns table created or already exists");
+    }
+  });
+
+  // update campaigns table to include description
+  db.run("ALTER TABLE campaigns ADD COLUMN description TEXT", (err) => {
+    if (err && !err.message.includes("duplicate column")) {
+      console.error("Migration error:", err.message);
+    } else {
+      console.log("Column 'description' ensured.");
     }
   });
 
@@ -325,7 +334,7 @@ const getAllUsers = () => {
   });
 };
 
-// Get a user by id
+// Get all campaigns
 const getAllCampaigns = () => {
   console.log('Getting all campaigns');
   return new Promise((resolve, reject) => {
@@ -728,6 +737,24 @@ const getUserCampaigns = (userId) => {
   });
 };
 
+// Delete a campaign by id
+const deleteCampaign = (campaignId) => {
+  return new Promise((resolve, reject) => {
+    db.run(
+      `DELETE FROM campaigns WHERE id = ?`,
+      [campaignId],
+      function (err) {
+        if (err) {
+          console.error('Error deleting campaign:', err);
+          reject(err);
+        } else {
+          resolve({ changes: this.changes }); // this.changes = rows affected
+        }
+      }
+    );
+  });
+};
+
 
 module.exports = {
   init,
@@ -751,5 +778,6 @@ module.exports = {
   createPlayerBoard,
   getPlayerBoardByCode,
   addPlayerBoardTile,
-  getPlayerBoardTiles
+  getPlayerBoardTiles,
+  deleteCampaign
 };

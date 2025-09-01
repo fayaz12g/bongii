@@ -533,7 +533,7 @@ router.route('/campaigns/:code').delete(verifyToken, async (req, res) => {
 });
 
 // Get user's campaigns
-router.route('/campaigns/user').get(verifyToken, async (req, res) => {
+router.route('/moderate/campaigns').get(verifyToken, async (req, res) => {
   try {
     const currentUser = await database.getUserByUsername(req.user.username);
     const campaigns = await database.getUserCampaigns(currentUser.id);

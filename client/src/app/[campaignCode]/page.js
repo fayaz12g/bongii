@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Users, Calendar, MapPin, Check, X, Trash2, Play, Shuffle, User, Trophy } from "lucide-react";
+import Background from "../components/background";
+import { BackgroundProvider } from "../components/context";
 
 // Background presets (should match your create screen)
 const backgroundPresets = [
@@ -330,6 +332,8 @@ const canFinalize = () => {
 
   return (
     <div className={`min-h-screen bg-gradient-to-br ${currentPreset.gradient}`}>
+      <BackgroundProvider>
+          <Background preset={currentPreset} />
       <div className="container mx-auto px-6 py-8">
         {/* Header */}
         <div className="flex justify-between items-center mb-8">
@@ -539,6 +543,8 @@ const canFinalize = () => {
           </div>
         </div>
       </div>
+        <Footer />
+        </BackgroundProvider>
     </div>
   );
 }

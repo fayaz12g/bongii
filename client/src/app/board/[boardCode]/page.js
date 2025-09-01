@@ -5,6 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { User, X } from "lucide-react";
 import { campaignService } from "../../services/campaignService";
+import Background from "@/app/components/background";
+import { BackgroundProvider } from "@/app/components/context";
 
 export default function PlayerBoardPage() {
   const { boardCode } = useParams();
@@ -68,6 +70,8 @@ export default function PlayerBoardPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-8">
+      <BackgroundProvider>
+        <Background />
       <div className="max-w-5xl mx-auto">
         <h1 className="text-3xl text-white font-bold mb-6">{campaignTitle}</h1>
         <div
@@ -100,6 +104,7 @@ export default function PlayerBoardPage() {
           ))}
         </div>
       </div>
+    </BackgroundProvider>
     </div>
   );
 }

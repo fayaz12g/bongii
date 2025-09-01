@@ -2,11 +2,13 @@
 import React from 'react';
 import Header from '../components/header';
 import Background from '../components/background';
+import { BackgroundProvider } from "../components/context";
 import Footer from '../components/footer';
 
 const HomePage = () => {
   return (
     <div>
+      <BackgroundProvider>
       <Header />
       <Background />
       {/* <Footer /> */}
@@ -66,6 +68,7 @@ const HomePage = () => {
       </main>
 
       <Footer />
+      </BackgroundProvider>
     </div>
   );
 };

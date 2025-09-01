@@ -4,8 +4,10 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Plus, X, Trash2, Calendar, Clock, Palette, Grid3X3, Square, SquareStack, Check } from "lucide-react";
 import Background from "../components/background";
+import { BackgroundProvider } from "../components/context";
 import Footer from "../components/footer";
 import { campaignService } from "../services/campaignService";
+import Header from "../components/header";
 
 // Preset gradients and animations
 const backgroundPresets = [
@@ -30,10 +32,15 @@ export default function CreateCampaign() {
   
   // Campaign data
   const [title, setTitle] = useState("");
-  const [selectedPreset, setSelectedPreset] = useState(backgroundPresets[0]);
+  const [selectedPreset, setSelectedPreset] = useState(backgroundPresets[3]);
   const [boardSize, setBoardSize] = useState(3);
   const [startDate, setStartDate] = useState("");
   const [startTime, setStartTime] = useState("");
+  const [description, setDescription] = useState("");
+
+  // Background stuff
+  const [showGradient, setShowGradient] = useState(true);
+  const [showDots, setShowDots] = useState(true);
 
   const [timeZone, setTimeZone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone);
   
@@ -47,7 +54,7 @@ export default function CreateCampaign() {
     // Check if user is logged in
     const token = localStorage.getItem("token");
     if (!token) {
-      router.push("/");
+      router.push("/login");
     }
   }, [router]);
 
@@ -93,6 +100,7 @@ export default function CreateCampaign() {
     try {
       const campaignData = {
         title,
+        description,
         backgroundPreset: selectedPreset.id,
         boardSize,
         startDateTime: new Date(`${startDate}T${startTime}:00`).toLocaleString("sv", { timeZone: "UTC" }),
@@ -142,21 +150,20 @@ export default function CreateCampaign() {
 
   return (
 
-  <div className={`w-full h-100 rounded-2xl border-2 border-white/30 bg-gradient-to-r ${selectedPreset.gradient} shadow-inner`}>
+  <div className={`w-full h-100 rounded-2xl border-2 border-white/30`}>
+    <BackgroundProvider selectedPreset={selectedPreset}>
+    <Background />
     <div className="relative min-h-screen flex flex-col">
+      <Header />
+      <br />
+      <br />
 
       <div className="flex-1 px-6 py-8">
         <div className="max-w-4xl mx-auto">
           {/* Header */}
           <div className="flex items-center justify-between mb-8">
-            <button
-              onClick={() => router.push("/")}
-              className="flex items-center text-white bg-white/10 hover:bg-white/20 px-4 py-2 rounded-xl border-2 border-white/30 hover:border-white/50 transition-all"
-            >
-              <ArrowLeft className="w-5 h-5 mr-2" />
-              <span className="font-medium">Back to Home</span>
-            </button>
-            
+            <div className="w-32"></div> {/* Spacer */}
+
             <div className="text-center">
               <h1 className="text-3xl font-bold text-white mb-2">Create Campaign</h1>
               <div className="flex items-center space-x-2">
@@ -193,6 +200,18 @@ export default function CreateCampaign() {
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     placeholder="Enter your campaign title..."
+                    className="w-full px-4 py-3 rounded-xl bg-white/10 text-white placeholder-gray-300 border-3 border-white/30 focus:border-blue-400 focus:ring-2 focus:ring-blue-500 transition-all"
+                  />
+                </div>
+
+                {/* Campaign Description */}
+                <div className="mb-6">
+                  <label className="block text-white font-semibold mb-2">Description</label>
+                  <textarea
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    placeholder="Briefly describe your campaign..."
+                    rows={3}
                     className="w-full px-4 py-3 rounded-xl bg-white/10 text-white placeholder-gray-300 border-3 border-white/30 focus:border-blue-400 focus:ring-2 focus:ring-blue-500 transition-all"
                   />
                 </div>
@@ -473,6 +492,12 @@ export default function CreateCampaign() {
                       <h3 className="text-white font-semibold mb-2">Campaign Title</h3>
                       <p className="text-gray-300">{title}</p>
                     </div>
+
+                    <div>
+                      <h3 className="text-white font-semibold mb-2">Description</h3>
+                      <p className="text-gray-300">{description}</p>
+                    </div>
+
                     <div>
                       <h3 className="text-white font-semibold mb-2">Board Size</h3>
                       <p className="text-gray-300">{boardSize}x{boardSize} (Goal: {boardSizes.find(s => s.value === boardSize)?.goal})</p>
@@ -537,8 +562,12 @@ export default function CreateCampaign() {
           </AnimatePresence>
         </div>
       </div>
-      <Footer />
+      <Footer
+        showDots={showDots}
+        showGradient={showGradient}
+      />
     </div>
+      </BackgroundProvider>
     </div>
   );
 }

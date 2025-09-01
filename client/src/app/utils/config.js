@@ -1,12 +1,12 @@
 // utils/config.js
 
 const SERVER_ADDRESSES = {
-  local: "http://localhost:3001",
+  local: "http://localhost:3000",
   prod: "https://bongii.fly.dev"
 };
 
 // Default server
-let serverBase = SERVER_ADDRESSES.prod;
+let serverBase = SERVER_ADDRESSES.local;
 
 // Function to set server
 export const setServerBase = (env) => {

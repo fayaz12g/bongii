@@ -1,9 +1,13 @@
 import { useEffect, useRef } from "react";
+import { useBackground } from "./context";
 
-const Background = () => {
+const Background = ({ }) => {
   const canvasRef = useRef(null);
+  const { showDots, showGradient, selectedPreset } = useBackground();
 
   useEffect(() => {
+    if (!showDots) return; // Skip dots if disabled
+
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
     let particles = [];
@@ -13,7 +17,6 @@ const Background = () => {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
 
-    // Create particles
     for (let i = 0; i < 100; i++) {
       particles.push({
         x: Math.random() * canvas.width,
@@ -23,26 +26,17 @@ const Background = () => {
       });
     }
 
-    // Track mouse position
-    window.addEventListener("mousemove", (e) => {
-      mouse.x = e.clientX;
-      mouse.y = e.clientY;
-    });
-
     const draw = () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-
       ctx.fillStyle = "rgba(255,255,255,0.8)";
       ctx.beginPath();
       particles.forEach((p) => {
-        // Gravity fall
         p.y += p.speed;
         if (p.y > canvas.height) {
           p.y = 0;
           p.x = Math.random() * canvas.width;
         }
 
-        // Cursor interaction (repel effect)
         const dx = p.x - mouse.x;
         const dy = p.y - mouse.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
@@ -55,7 +49,6 @@ const Background = () => {
         ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
       });
       ctx.fill();
-
       animationFrameId = requestAnimationFrame(draw);
     };
 
@@ -71,18 +64,18 @@ const Background = () => {
       cancelAnimationFrame(animationFrameId);
       window.removeEventListener("resize", handleResize);
     };
-  }, []);
+  }, [showDots]);
 
   return (
     <>
-      {/* Gradient background (consistent now, not random) */}
-      <div className="min-h-screen fixed inset-0 -z-20 animate-gradient bg-gradient-to-r from-pink-500 via-red-500 to-yellow-500" />
-
-      {/* Falling dots canvas */}
-      <canvas
-        ref={canvasRef}
-        className="fixed inset-0 -z-10"
-      />
+      {showGradient && (
+        <div
+          className={`min-h-screen fixed inset-0 -z-20 animate-gradient bg-gradient-to-r ${
+            selectedPreset?.gradient || "from-pink-500 via-red-500 to-yellow-500"
+          }`}
+        />
+      )}
+      {showDots && <canvas ref={canvasRef} className="fixed inset-0 -z-10" />}
     </>
   );
 };

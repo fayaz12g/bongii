@@ -3,6 +3,7 @@ import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
 import { userService } from "../services/userService";
 import Background from "../components/background";
+import { BackgroundProvider } from "../components/context";
 import Footer from "../components/footer";
 
 export default function LoginPage() {
@@ -39,6 +40,7 @@ export default function LoginPage() {
 
   return (
     <div className="relative min-h-screen flex flex-col items-center justify-center">
+      <BackgroundProvider>
       <Background />
 
       {/* Glassy Centered Form */}
@@ -118,6 +120,7 @@ export default function LoginPage() {
       </div>
 
       <Footer />
+      </BackgroundProvider>
     </div>
   );
 }
