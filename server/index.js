@@ -113,6 +113,17 @@ router.route('/boards').get(async (req, res) => {
   }
 });
 
+// Get all campaign boards
+router.route('/campaigns/:code/boards').get(async (req, res) => {
+  try {
+    const boards = await database.getCampaignBoards(req.params.code);
+    res.json(boards)
+  } catch (error) {
+    console.error('Error getting all campaign boards:', error);
+    res.status(500).json({ error: error });
+  }
+});
+
 // Get currently logged in user
 router.route('/users/current').get(verifyToken, async (req, res) => {
   try {

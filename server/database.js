@@ -428,6 +428,55 @@ const getAllBoards = () => {
   });
 };
 
+// Get campaign boards with full related data
+const getCampaignBoards = (campaignCode) => {
+  console.log("Getting all boards for campaign code:", campaignCode);
+
+  return new Promise((resolve, reject) => {
+    // Step 1: find campaign by code
+    db.get("SELECT * FROM campaigns WHERE code = ?", [campaignCode], async (err, campaign) => {
+      if (err) {
+        console.error("Error finding campaign by code:", err);
+        return reject(err);
+      }
+      if (!campaign) {
+        return reject(new Error("Campaign not found"));
+      }
+
+      try {
+        // Step 2: get all boards for this campaign id
+        db.all("SELECT * FROM playerBoards WHERE campaignId = ?", [campaign.id], async (err, boards) => {
+          if (err) {
+            console.error("Error getting boards:", err);
+            return reject(err);
+          }
+
+          // Step 3: load campaign details (you already have them here)
+          const preset = campaign?.backgroundPreset
+            ? await getBackgroundPreset(campaign.backgroundPreset)
+            : null;
+
+          const playerCount = await getCampaignPlayerCount(campaign.id);
+
+          const boardsWithDetails = boards.map((board) => ({
+            ...board,
+            campaignTitle: campaign?.title || "Unknown Campaign",
+            campaignBoardSize: campaign?.boardSize,
+            backgroundPreset: preset,
+            playerCount,
+          }));
+
+          console.log("Found boards with details:", boardsWithDetails);
+          resolve(boardsWithDetails);
+        });
+      } catch (error) {
+        console.error("Error assembling full board data:", error);
+        reject(error);
+      }
+    });
+  });
+};
+
 // Get a campaign by code with all related data
 const getCampaignByCode = (code) => {
   console.log('Getting campaign with code:', code);
@@ -937,5 +986,6 @@ module.exports = {
   addPlayerBoardTile,
   getPlayerBoardTiles,
   deleteCampaign,
-  getAllBoards
+  getAllBoards,
+  getCampaignBoards,
 };

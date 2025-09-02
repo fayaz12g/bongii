@@ -68,10 +68,27 @@ export const campaignService = {
       });
       return response;
     } catch (error) {
-      console.error('Error fetching campaign:', error);
+      console.error('Error fetching boards:', error);
       throw error;
     }
   },
+
+  // Get campaign boards
+  async getCampaignBoards(campaignCode) {
+    try {
+      const response = await fetch(`${getServerPath()}/campaigns/${campaignCode}/boards`, {
+        method: 'GET',
+        headers: {
+          "Content-type": "application/json; charset=UTF-8",
+        },
+      });
+      return response;
+    } catch (error) {
+      console.error('Error fetching campaign boards:', error);
+      throw error;
+    }
+  },
+
 
  // Create a new Bongii campaign
   async createCampaign(payload) {

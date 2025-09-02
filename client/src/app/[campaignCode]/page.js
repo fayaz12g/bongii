@@ -3,22 +3,13 @@ import { campaignService } from "../services/campaignService";
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Users, Calendar, MapPin, Check, X, Trash2, Play, Shuffle, User, Trophy } from "lucide-react";
+import { ArrowLeft, Users, Eye, Clock, Check, X, Trash2, Play, Shuffle, User, Trophy } from "lucide-react";
 import Background from "../components/background";
 import { BackgroundProvider } from "../components/context";
 import Footer from "../components/footer";
 import { useBackground } from "../components/context";
 import Header from "../components/header";
 
-// Background presets (should match your create screen)
-const backgroundPresets = [
-  { id: 1, name: "Ocean Waves", gradient: "from-blue-400 via-blue-600 to-purple-700", animation: "wave" },
-  { id: 2, name: "Sunset Glow", gradient: "from-orange-400 via-pink-500 to-purple-600", animation: "glow" },
-  { id: 3, name: "Forest Mystery", gradient: "from-green-400 via-teal-500 to-blue-600", animation: "float" },
-  { id: 4, name: "Cherry Blossom", gradient: "from-pink-300 via-purple-400 to-indigo-500", animation: "drift" },
-  { id: 5, name: "Golden Hour", gradient: "from-yellow-400 via-orange-500 to-red-600", animation: "pulse" },
-  { id: 6, name: "Arctic Aurora", gradient: "from-cyan-300 via-blue-400 to-indigo-600", animation: "shimmer" },
-];
 
 export default function CampaignPage() {
   const { campaignCode } = useParams();
@@ -27,6 +18,8 @@ export default function CampaignPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [finalizing, setFinalizing] = useState(false);
+  const [campaignBoards, setCampaignBoards] = useState([]);
+  const [loadingBoards, setLoadingBoards] = useState(false);
   
   // Board state
   const [board, setBoard] = useState([]);
@@ -59,8 +52,24 @@ export default function CampaignPage() {
       }
     };
 
+   const fetchCampaignBoards = async () => {
+      setLoadingBoards(true);
+      try {
+        const response = await campaignService.getCampaignBoards(campaignCode);
+        if (response.ok) {
+          const data = await response.json();
+          setCampaignBoards(data);
+        }
+      } catch (err) {
+        console.error("Error fetching campaign boards:", err);
+      } finally {
+        setLoadingBoards(false);
+      }
+    };
+
     if (campaignCode) {
       fetchCampaign();
+      fetchCampaignBoards();
     }
   }, [campaignCode]);
 
@@ -72,9 +81,51 @@ export default function CampaignPage() {
     setBoard(newBoard);
   };
 
-  const getCurrentPreset = () => {
-    // return backgroundPresets.find(preset => preset.id === campaign?.backgroundPreset?.id) || backgroundPresets[0];
-    return campaign.backgroundPreset;
+const formatTimeAgo = (dateString) => {
+    const date = new Date(dateString);
+    const now = new Date();
+    const diffInSeconds = Math.floor((now - date) / 1000);
+    
+    if (diffInSeconds < 60) return 'Just now';
+    if (diffInSeconds < 3600) return `${Math.floor(diffInSeconds / 60)}m ago`;
+    if (diffInSeconds < 86400) return `${Math.floor(diffInSeconds / 3600)}h ago`;
+    return `${Math.floor(diffInSeconds / 86400)}d ago`;
+  };
+
+const renderMiniBoard = (boardData, boardSize) => {
+    const tiles = Array(boardSize * boardSize).fill(null);
+    
+    if (boardData.selectedTiles) {
+      boardData.selectedTiles.forEach(tile => {
+        if (tile.position < tiles.length) {
+          tiles[tile.position] = tile;
+        }
+      });
+    }
+  return (
+        <div 
+          className="grid gap-0.5 w-full h-24"
+          style={{ 
+            gridTemplateColumns: `repeat(${boardSize}, 1fr)`,
+          }}
+        >
+          {tiles.map((tile, index) => (
+            <div
+              key={index}
+              className={`aspect-square border border-white/20 rounded-sm flex items-center justify-center text-[6px] ${
+                tile
+                  ? tile.isCenter
+                    ? "bg-yellow-500/50"
+                    : "bg-green-500/50"
+                  : "bg-white/10"
+              }`}
+            >
+              {tile?.isCenter && <User className="w-2 h-2" />}
+              {tile && !tile.isCenter && "•"}
+            </div>
+          ))}
+        </div>
+      );
   };
 
   const getGoal = (boardSize) => {
@@ -367,44 +418,49 @@ const canFinalize = () => {
           </div>
         </div>
 
-        <div className="grid lg:grid-cols-4 gap-8">
+        <div className="grid lg:grid-cols-6 gap-8">
           {/* Categories Panel */}
-          <div className="lg:col-span-1">
+          <div className="lg:col-span-2">
             <div className="bg-black/30 backdrop-blur-sm rounded-3xl p-6 border-2 border-white/20 shadow-2xl sticky top-8">
               <h2 className="text-xl font-bold text-white mb-4">Categories</h2>
-              
-              <div className="space-y-4 max-h-96 overflow-y-auto">
+
+              <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
                 {campaign.categories.map((category) => (
-                  <div key={category.id} className="space-y-2">
-                    <h3 className="text-white font-semibold text-sm flex items-center">
-                      {category.name}
-                      {category.required && (
-                        <span className="ml-2 text-xs bg-red-500 text-white px-2 py-0.5 rounded">Required</span>
-                      )}
-                    </h3>
-                    <p className="text-gray-300 text-xs">
-                      {category.type === 'choose_many' ? 'Select multiple' : 'Select one'}
+                  <div 
+                    key={category.id} 
+                    className="bg-white/5 border border-white/10 rounded-2xl p-4 space-y-3 shadow-md"
+                  >
+                    {/* Category Header */}
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-white font-semibold text-sm flex items-center">
+                        {category.name}
+                        {category.required && (
+                          <span className="ml-2 text-xs bg-red-500 text-white px-2 py-0.5 rounded">
+                            Required
+                          </span>
+                        )}
+                      </h3>
+                    </div>
+                    <p className="text-gray-400 text-xs">
+                      {category.type === "choose_many" ? "Select multiple" : "Select one"}
                     </p>
-                    
-                    <div className="space-y-1">
+
+                    {/* Category Items → Tile Grid */}
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                       {category.items.map((item) => (
                         <button
                           key={item.id}
                           onClick={() => handleCategoryItemSelect(category, item)}
-                          className={`w-full p-2 rounded-lg border-2 text-sm transition-all ${
-                            isItemSelected(category, item)
-                              ? isItemOnBoard(category, item)
-                                ? "bg-green-500/30 border-green-400 text-green-100"
-                                : "bg-blue-500/30 border-blue-400 text-blue-100"
-                              : "bg-white/10 border-white/30 text-white hover:bg-white/20"
-                          }`}
+                          className={`aspect-square flex items-center justify-center text-center rounded-xl border-2 text-xs font-medium transition-all
+                            ${
+                              isItemSelected(category, item)
+                                ? isItemOnBoard(category, item)
+                                  ? "bg-green-500/30 border-green-400 text-green-100"
+                                  : "bg-blue-500/30 border-blue-400 text-blue-100"
+                                : "bg-white/10 border-white/20 text-white hover:bg-white/20"
+                            }`}
                         >
-                          <div className="flex items-center justify-between">
-                            <div className="text-white">{item.text}</div>
-                            {isItemSelected(category, item) && (
-                              <Check className="w-4 h-4 flex-shrink-0" />
-                            )}
-                          </div>
+                          <span className="px-1 line-clamp-2">{item.text}</span>
                         </button>
                       ))}
                     </div>
@@ -413,6 +469,7 @@ const canFinalize = () => {
               </div>
             </div>
           </div>
+
 
           {/* Main Content */}
           <div className="lg:col-span-3">
@@ -546,8 +603,75 @@ const canFinalize = () => {
               )}
             </div>
           </div>
-        </div>
-      </div>
+         {/* Existing Boards Panel */}
+          <div className="lg:col-span-1">
+            <div className="bg-black/30 backdrop-blur-sm rounded-3xl p-6 border-2 border-white/20 shadow-2xl sticky top-8">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-bold text-white">Player Boards</h2>
+                <div className="flex items-center text-white/70">
+                  <Eye className="w-4 h-4 mr-1" />
+                  <span className="text-sm">{campaignBoards.length}</span>
+                </div>
+              </div>
+              
+              <div className="max-h-96 overflow-y-auto space-y-3">
+                {loadingBoards ? (
+                  <div className="text-center py-8">
+                    <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-white mx-auto mb-2"></div>
+                    <p className="text-white/70 text-sm">Loading boards...</p>
+                  </div>
+                ) : campaignBoards.length === 0 ? (
+                  <div className="text-center py-8">
+                    <Users className="w-12 h-12 text-white/30 mx-auto mb-2" />
+                    <p className="text-white/70 text-sm">No boards created yet</p>
+                    <p className="text-white/50 text-xs mt-1">Be the first to play!</p>
+                  </div>
+                ) : (
+                  campaignBoards.map((boardData) => (
+                    <motion.div
+                      key={boardData.boardCode}
+                      whileHover={{ scale: 1.02 }}
+                      className="bg-white/10 hover:bg-white/15 rounded-xl p-4 border border-white/20 hover:border-white/30 cursor-pointer transition-all"
+                      onClick={() => router.push(`/boards/${boardData.boardCode}`)}
+                    >
+                      <div className="mb-3">
+                        {renderMiniBoard(boardData, campaign.boardSize)}
+                      </div>
+                      
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-white font-medium text-sm truncate">
+                            {boardData.playerName || 'Anonymous'}
+                          </h4>
+                          <motion.div
+                            whileHover={{ scale: 1.1 }}
+                            className="bg-blue-500/20 hover:bg-blue-500/30 rounded-full p-1"
+                          >
+                            <Eye className="w-3 h-3 text-blue-300" />
+                          </motion.div>
+                        </div>
+                        
+                        <div className="flex items-center text-white/50 text-xs">
+                          <Clock className="w-3 h-3 mr-1" />
+                          <span>{formatTimeAgo(boardData.createdAt)}</span>
+                        </div>
+                      </div>
+                    </motion.div>
+                  ))
+                )}
+              </div>
+
+              {campaignBoards.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-white/20">
+                  <p className="text-white/50 text-xs text-center">
+                    Click any board to view it
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+          </div>
+          </div>
         <Footer />
     </div>
   );
