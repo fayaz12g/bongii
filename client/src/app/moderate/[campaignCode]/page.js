@@ -7,7 +7,6 @@ import Header from "../../components/header";
 import Footer from "../../components/footer";
 import Background from "../../components/background";
 import { BackgroundProvider } from "../../components/context";
-import { V } from "framer-motion/dist/types.d-6pKw1mTI";
 
 export default function ModerateCampaignPage() {
   const router = useRouter();
