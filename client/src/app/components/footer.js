@@ -8,7 +8,7 @@ import { useBackground } from "./context";
 const Footer = () => {
   const { isPlaying, start, stop } = useMusic();
   const [showMenu, setShowMenu] = useState(false);
-  const [showPresets, setShowPresets] = useState(false); // new state for preset grid
+  const [showPresets, setShowPresets] = useState(false);
 
   const {
     showDots,
