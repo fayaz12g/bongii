@@ -2,10 +2,12 @@
 import { useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { profileService } from '../services/profileService';
-import Background from '../components/background';
 import Header from '../components/header';
-import Footer from '../components/footer';
+import dynamic from "next/dynamic";
 import { BackgroundProvider } from "../components/context";
+
+const Background = dynamic(() => import("../components/background"), { ssr: false });
+const Footer = dynamic(() => import("../components/footer"), { ssr: false });
 
 export default function ProfilePage() {
   const router = useRouter(); 
