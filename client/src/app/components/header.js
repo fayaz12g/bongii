@@ -7,10 +7,8 @@ import { profileService } from '../services/profileService';
 
 const menuItemsBase = [
   { name: "Home", path: "/home" },
-  { name: "Create", path: "/create" },
   { name: "Boards", path: "/boards" },
   { name: "Campaigns", path: "/browse" },
-  { name: "Moderate", path: "/moderate" },
   { name: "Profile", path: "/profile" },
 ];
 
@@ -43,11 +41,18 @@ const Header = () => {
     router.push('/login');
   };
 
-  // Build menu dynamically based on login state
-  const menuItems = [...menuItemsBase, loggedIn 
-    ? { name: "Sign Out", action: handleSignOut } 
-    : { name: "Sign In", path: "/login" }
-  ];
+// Build menu dynamically based on login state
+const menuItems = [
+  ...menuItemsBase,
+  ...(loggedIn
+    ? [
+        { name: "Create", path: "/create" },
+        { name: "Moderate", path: "/moderate" },
+        { name: "Sign Out", action: handleSignOut },
+      ]
+    : [{ name: "Sign In", path: "/login" }]
+  ),
+];
 
   return (
     <>
