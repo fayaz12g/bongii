@@ -5,9 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Users, Eye, Clock, Check, X, Trash2, Play, Shuffle, User, Trophy } from "lucide-react";
 import Background from "../components/background";
-import { BackgroundProvider } from "../components/context";
+import { BackgroundProvider, useBackground } from "../components/context";
 import Footer from "../components/footer";
-import { useBackground } from "../components/context";
 import Header from "../components/header";
 
 
