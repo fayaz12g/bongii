@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Github, Volume2, VolumeX, Image, PaintBucket, Grid, Check } from "lucide-react";
+import { Github, Volume2, VolumeX, Image, PaintBucket, Snowflake, Check } from "lucide-react";
 import { useMusic } from "./music";
 import { useBackground } from "./context";
 
@@ -86,7 +86,7 @@ const Footer = () => {
                   }`}
                   aria-label="Toggle Dots"
                 >
-                  <Grid className={`w-5 h-5 ${showDots ? "text-black/80" : "text-white/50"}`} />
+                  <Snowflake className={`w-5 h-5 ${showDots ? "text-black/80" : "text-white/50"}`} />
                 </button>
                 )}
 
