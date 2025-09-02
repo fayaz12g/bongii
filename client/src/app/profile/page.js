@@ -22,38 +22,29 @@ export default function ProfilePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState('');
 
-
-  useEffect(() => {
-    const loadUserData = async () => {
-      
+  const loadUserData = async () => {
         profileService.getUserData().then(response => {
             return response.json()
-        })
-        
+      })
         .then(data => {
         console.log(data)
         setUserData(data);
         setIsLoading(false);
-     
     });
-      
-    };
+  };
 
+  useEffect(() => {
     // Check if the token exists in localStorage
     const token = localStorage.getItem('token');
-    
-    const seeifyouhaveaccess = async () => {
-      console.log("Checking access");
-      profileService.getUserData().then(response => {
-          if (!response.ok) {
-            router.push('/login'); // Redirect to home page
-          }
-          else {
-            loadUserData();
-          }
-      });
-    }
-    seeifyouhaveaccess();
+    console.log("Checking access");
+    profileService.getUserData().then(response => {
+        if (!response.ok) {
+          router.push('/login'); // Redirect to home page
+        }
+        else {
+          loadUserData();
+        }
+    });
   }, []);
 
   const handleInputChange = (e) => {
@@ -77,11 +68,13 @@ export default function ProfilePage() {
   if (isLoading) {
     return (
       <div>
-        <Header />
-        <Background />
-        <div className="flex justify-center items-center min-h-screen">
-          <div className="text-white">Loading...</div>
-        </div>
+        <BackgroundProvider>
+          <Header />
+          <Background />
+          <div className="flex justify-center items-center min-h-screen">
+            <div className="text-white">Loading...</div>
+          </div>
+        </BackgroundProvider>
       </div>
     );
   }
