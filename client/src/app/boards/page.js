@@ -40,7 +40,6 @@ export default function BrowseBoards() {
 
   return (
     <div>
-      <BackgroundProvider>
         <Header />
         <br />
         <Background />
@@ -88,9 +87,7 @@ export default function BrowseBoards() {
             ))
           )}
         </main>
-
         <Footer />
-      </BackgroundProvider>
     </div>
   );
 }

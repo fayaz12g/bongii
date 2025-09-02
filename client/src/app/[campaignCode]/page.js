@@ -7,6 +7,8 @@ import { ArrowLeft, Users, Calendar, MapPin, Check, X, Trash2, Play, Shuffle, Us
 import Background from "../components/background";
 import { BackgroundProvider } from "../components/context";
 import Footer from "../components/footer";
+import { useBackground } from "../components/context";
+import Header from "../components/header";
 
 // Background presets (should match your create screen)
 const backgroundPresets = [
@@ -32,6 +34,7 @@ export default function CampaignPage() {
   const [playerName, setPlayerName] = useState("");
   const [draggedItem, setDraggedItem] = useState(null);
   const [hoveredCell, setHoveredCell] = useState(null);
+  const { setSelectedPreset } = useBackground();
 
   useEffect(() => {
     const fetchCampaign = async () => {
@@ -42,6 +45,7 @@ export default function CampaignPage() {
           console.log(data);
           setCampaign(data);
           initializeBoard(data.boardSize);
+          setSelectedPreset(data.backgroundPreset);
         } else if (response.status === 404) {
           setError("Campaign not found");
         } else {
@@ -319,11 +323,11 @@ const canFinalize = () => {
             <h1 className="text-3xl font-bold text-red-400 mb-4">Error</h1>
             <p className="text-white mb-6">{error}</p>
             <button
-              onClick={() => router.push("/")}
+              onClick={() => router.push("/browse")}
               className="flex items-center justify-center mx-auto text-white bg-red-500/20 hover:bg-red-500/30 px-6 py-3 rounded-xl border-2 border-red-400 hover:border-red-300 transition-all"
             >
               <ArrowLeft className="w-5 h-5 mr-2" />
-              Back to Home
+              Back
             </button>
           </div>
         </div>
@@ -333,17 +337,17 @@ const canFinalize = () => {
 
   return (
     <div className={`min-h-screen`}>
-      <BackgroundProvider selectedPreset={campaign.backgroundPreset}>
-          <Background />
+      <Header />
+      <br /> <br /> <br />
+      <Background />
       <div className="container mx-auto px-6 py-8">
-        {/* Header */}
         <div className="flex justify-between items-center mb-8">
           <button
-            onClick={() => router.push("/")}
+            onClick={() => router.push("/browse")}
             className="flex items-center text-white bg-white/10 hover:bg-white/20 px-4 py-2 rounded-xl border-2 border-white/30 hover:border-white/50 transition-all"
           >
             <ArrowLeft className="w-5 h-5 mr-2" />
-            <span className="font-medium">Back to Home</span>
+            <span className="font-medium">Back</span>
           </button>
           
           <div className="text-center">
@@ -545,7 +549,6 @@ const canFinalize = () => {
         </div>
       </div>
         <Footer />
-        </BackgroundProvider>
     </div>
   );
 }

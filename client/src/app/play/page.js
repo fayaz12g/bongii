@@ -31,7 +31,6 @@ export default function PlayPage() {
 
   return (
     <div className="relative min-h-screen flex flex-col">
-        <BackgroundProvider>
       <Background />
       <div className="flex-1 flex flex-col justify-center items-center px-6">
         <div className="w-full max-w-2xl">
@@ -84,7 +83,6 @@ export default function PlayPage() {
 
       </div>
       <Footer />
-    </BackgroundProvider>
     </div>
   );
 }

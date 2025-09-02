@@ -8,7 +8,6 @@ import Footer from '../components/footer';
 const HomePage = () => {
   return (
     <div>
-      <BackgroundProvider>
       <Header />
       <Background />
       {/* <Footer /> */}
@@ -68,7 +67,6 @@ const HomePage = () => {
       </main>
 
       <Footer />
-      </BackgroundProvider>
     </div>
   );
 };

@@ -1,4 +1,5 @@
 // context.js
+"use client";
 import { createContext, useContext, useState, useEffect } from "react";
 
 const BackgroundContext = createContext();

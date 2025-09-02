@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import Background from "../components/background";
-import { BackgroundProvider } from "../components/context";
+import { BackgroundProvider, useBackground } from "../components/context";
 import Footer from "../components/footer";
 import { campaignService } from "../services/campaignService";
 import Header from "../components/header";
@@ -33,7 +33,7 @@ export default function CreateCampaign() {
   
   // Campaign data
   const [title, setTitle] = useState("");
-  const [selectedPreset, setSelectedPreset] = useState(backgroundPresets[3]);
+  const { selectedPreset, setSelectedPreset } = useBackground();
   const [themeMode, setThemeMode] = useState('preset');
   const [boardSize, setBoardSize] = useState(3);
   const [startDate, setStartDate] = useState("");
@@ -237,7 +237,6 @@ useEffect(() => {
   return (
 
   <div className={`w-full h-100 rounded-2xl border-2 border-white/30`}>
-    <BackgroundProvider selectedPreset={selectedPreset}>
     <Background />
     <div className="relative min-h-screen flex flex-col">
       <Header />
@@ -800,7 +799,6 @@ useEffect(() => {
         showGradient={showGradient}
       />
     </div>
-      </BackgroundProvider>
     </div>
   );
 }

@@ -39,7 +39,6 @@ export default function Home() {
 
   return (
     <div className="relative min-h-screen flex flex-col">
-      <BackgroundProvider>
         <Background />
 
         {/* Loading overlay */}
@@ -118,7 +117,6 @@ export default function Home() {
           </div>
         </div>
         <Footer />
-      </BackgroundProvider>
     </div>
   );
 }

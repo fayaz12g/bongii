@@ -6,13 +6,15 @@ import { campaignService } from "../../services/campaignService";
 import Header from "../../components/header";
 import Footer from "../../components/footer";
 import Background from "../../components/background";
-import { BackgroundProvider } from "../../components/context";
+import { BackgroundProvider, useBackground } from "../../components/context";
+import { useBackground } from "../components/context";
 
 export default function ModerateCampaignPage() {
   const router = useRouter();
   const { campaignCode } = useParams(); // get campaign code from URL
   const [campaign, setCampaign] = useState(null);
   const [timeLeft, setTimeLeft] = useState(null);
+  const { setSelectedPreset } = useBackground();
 
   const loadCampaign = async () => {
     try {
@@ -22,6 +24,7 @@ export default function ModerateCampaignPage() {
           console.log(data);
           setCampaign(data);
           updateTimeLeft(data.startDateTime);
+          setSelectedPreset(data.backgroundPreset);
       }
     } catch (err) {
       console.error("Error loading campaign:", err);
@@ -58,14 +61,12 @@ export default function ModerateCampaignPage() {
   if (!campaign) {
     return (
       <div>
-        <BackgroundProvider>
           <Background />
           <Header />
           <main className="max-w-5xl mx-auto p-6 mt-24 text-center text-gray-400">
             Loading campaign...
           </main>
           <Footer />
-        </BackgroundProvider>
       </div>
     );
   }
@@ -81,7 +82,6 @@ export default function ModerateCampaignPage() {
 
   return (
     <div>
-      <BackgroundProvider selectedPreset={campaign.backgroundPreset}>
         <Background />
         <Header />
         <br />
@@ -127,7 +127,6 @@ export default function ModerateCampaignPage() {
           </div>
         </main>
         <Footer />
-      </BackgroundProvider>
     </div>
   );
 }

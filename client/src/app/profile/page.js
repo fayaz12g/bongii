@@ -81,7 +81,6 @@ export default function ProfilePage() {
 
   return (
     <div>
-      <BackgroundProvider>
       <Header />
       <Background />
       {/* <Footer /> */}
@@ -196,7 +195,6 @@ export default function ProfilePage() {
         </div>
       </div>
       <Footer />
-      </BackgroundProvider>
     </div>
   );
 }

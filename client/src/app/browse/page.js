@@ -32,11 +32,9 @@ export default function Browse() {
 
   return (
     <div>
-      <BackgroundProvider>
       <Header />
       <br />
       <Background />
-
       <main className="max-w-5xl mx-auto p-6 mt-24">
         <div className="text-center mb-12">
           <h1 className="text-5xl font-bold mb-4">Browse Campaigns</h1>
@@ -75,9 +73,7 @@ export default function Browse() {
           </div>
         )}
       </main>
-
       <Footer />
-    </BackgroundProvider>
     </div>
   );
 }

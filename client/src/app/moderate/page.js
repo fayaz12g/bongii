@@ -51,7 +51,6 @@ export default function Moderate() {
 
   return (
     <div>
-      <BackgroundProvider>
         <Background />
         <Header />
         <br />
@@ -112,9 +111,7 @@ export default function Moderate() {
             </div>
           )}
         </main>
-
         <Footer />
-      </BackgroundProvider>
     </div>
   );
 }

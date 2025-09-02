@@ -45,7 +45,6 @@ export default function RegisterPage() {
 
   return (
     <div className="relative min-h-screen flex flex-col items-center justify-center">
-      <BackgroundProvider>
       <Background />
 
       <div className="z-10 w-full max-w-3xl p-10 rounded-3xl backdrop-blur-xl bg-white/10 border border-white/20 shadow-2xl">
@@ -167,9 +166,7 @@ export default function RegisterPage() {
           </p>
         </div>
       </div>
-
       <Footer />
-    </BackgroundProvider>
     </div>
   );
 }

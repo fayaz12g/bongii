@@ -7,6 +7,7 @@ import { campaignService } from "../../services/campaignService";
 import Background from "@/app/components/background";
 import { BackgroundProvider } from "@/app/components/context";
 import Header from "@/app/components/header";
+import { useBackground } from "../../components/context";
 
 export default function PlayerBoardPage() {
   const { boardCode } = useParams();
@@ -15,6 +16,7 @@ export default function PlayerBoardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [timeLeft, setTimeLeft] = useState(null); // For countdown
+  const { setSelectedPreset } = useBackground();
 
   useEffect(() => {
     const fetchBoard = async () => {
@@ -23,6 +25,7 @@ export default function PlayerBoardPage() {
         if (res.ok) {
           const data = await res.json();
           setBoardData(data);
+          setSelectedPreset(data.backgroundPreset);
 
           // Initialize countdown
           if (data.startDateTime) {
@@ -94,7 +97,6 @@ export default function PlayerBoardPage() {
 
   return (
     <div className="min-h-screen">
-      <BackgroundProvider selectedPreset={boardData.backgroundPreset}>
         <Background />
         <Header />
         <br /><br /><br />
@@ -132,7 +134,6 @@ export default function PlayerBoardPage() {
             ))}
           </div>
         </div>
-      </BackgroundProvider>
     </div>
   );
 }
