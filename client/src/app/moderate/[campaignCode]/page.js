@@ -10,6 +10,7 @@ import { BackgroundProvider } from "../../components/context";
 import { V } from "framer-motion/dist/types.d-6pKw1mTI";
 
 export default function ModerateCampaignPage() {
+  const router = useRouter();
   const { campaignCode } = useParams(); // get campaign code from URL
   const [campaign, setCampaign] = useState(null);
   const [timeLeft, setTimeLeft] = useState(null);

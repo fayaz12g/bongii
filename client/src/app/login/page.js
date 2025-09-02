@@ -13,6 +13,14 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [isFormValid, setIsFormValid] = useState(false);
 
+  useEffect(() => {
+    // Check if user is logged in
+    const token = localStorage.getItem("token");
+    if (token) {
+      router.push("/home");
+    }
+  }, [router]);
+
   // Check if all required fields are filled
   useEffect(() => {
     setIsFormValid(username && password);

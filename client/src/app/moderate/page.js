@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname, useRouter } from 'next/navigation';
 import Link from "next/link";
 import { campaignService } from "../services/campaignService";
 import Footer from "../components/footer";
@@ -9,6 +10,7 @@ import { BackgroundProvider } from "../components/context";
 import Header from "../components/header";
 
 export default function Moderate() {
+  const router = useRouter();
   const [campaigns, setCampaigns] = useState([]);
 
   const loadCampaigns = async () => {
