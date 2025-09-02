@@ -48,10 +48,12 @@ export default function ProfilePage() {
           if (!response.ok) {
             router.push('/login'); // Redirect to home page
           }
+          else {
+            loadUserData();
+          }
       });
     }
     seeifyouhaveaccess();
-    loadUserData();
   }, []);
 
   const handleInputChange = (e) => {
