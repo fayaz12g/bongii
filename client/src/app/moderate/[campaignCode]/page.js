@@ -7,7 +7,6 @@ import Header from "../../components/header";
 import Footer from "../../components/footer";
 import Background from "../../components/background";
 import { BackgroundProvider, useBackground } from "../../components/context";
-import { useBackground } from "../components/context";
 
 export default function ModerateCampaignPage() {
   const router = useRouter();
