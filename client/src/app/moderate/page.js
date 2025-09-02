@@ -22,8 +22,15 @@ export default function Moderate() {
   };
 
   useEffect(() => {
-    loadCampaigns();
-  }, []);
+    // Check if user is logged in
+    const token = localStorage.getItem("token");
+    if (!token) {
+      router.push("/login");
+    }
+    else {
+      loadCampaigns();
+    }
+  }, [router]);
 
   const handleDelete = async (code) => {
     if (!confirm("Are you sure you want to delete this campaign?")) return;

@@ -7,6 +7,7 @@ import Header from "../../components/header";
 import Footer from "../../components/footer";
 import Background from "../../components/background";
 import { BackgroundProvider } from "../../components/context";
+import { V } from "framer-motion/dist/types.d-6pKw1mTI";
 
 export default function ModerateCampaignPage() {
   const { campaignCode } = useParams(); // get campaign code from URL
@@ -41,10 +42,18 @@ export default function ModerateCampaignPage() {
       }
     }, 1000);
   };
-
+  
   useEffect(() => {
-    loadCampaign();
-  }, [campaignCode]);
+    // Check if user is logged in
+    const token = localStorage.getItem("token");
+    if (!token) {
+      router.push("/login");
+    }
+    else {
+      loadCampaign();
+    }
+  }, [router, campaignCode]);
+
 
   if (!campaign) {
     return (
