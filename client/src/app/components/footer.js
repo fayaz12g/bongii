@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Github, Volume2, VolumeX, Image, Paintbrush, Grid, Check } from "lucide-react";
+import { Github, Volume2, VolumeX, Image, PaintBucket, Grid, Check } from "lucide-react";
 import { useMusic } from "./music";
 import { useBackground } from "./context";
 
@@ -73,7 +73,7 @@ const Footer = () => {
                   }`}
                   aria-label="Toggle Background"
                 >
-                  <Paintbrush className="w-5 h-5" />
+                  <PaintBucket className={`w-5 h-5 ${showGradient ? "text-black/80" : "text-white/50"}`} />
                 </button>
                 )}
 
@@ -86,7 +86,7 @@ const Footer = () => {
                   }`}
                   aria-label="Toggle Dots"
                 >
-                  <Grid className="w-5 h-5" />
+                  <Grid className={`w-5 h-5 ${showDots ? "text-black/80" : "text-white/50"}`} />
                 </button>
                 )}
 

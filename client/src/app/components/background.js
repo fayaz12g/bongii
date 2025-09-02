@@ -6,7 +6,7 @@ const Background = ({}) => {
   const { showDots, showGradient, selectedPreset } = useBackground();
 
   useEffect(() => {
-    if (!showDots) return; // Skip dots if disabled
+    if (!showDots) return;
 
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
@@ -25,9 +25,9 @@ const Background = ({}) => {
         y: Math.random() * canvas.height,
         originalX: Math.random() * canvas.width,
         originalY: Math.random() * canvas.height,
-        radius: Math.random() * 3 + 2,
-        baseRadius: Math.random() * 3 + 2,
-        speed: Math.random() * 1 + 0.5,
+        radius: Math.random() * 10 + 2,
+        baseRadius: Math.random() * 5 + 2,
+        speed: Math.random() * 0.5 + 0.5,
         angle: Math.random() * Math.PI * 2,
         phase: Math.random() * Math.PI * 2,
         opacity: 0.8,
