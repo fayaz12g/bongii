@@ -7,6 +7,7 @@ import { campaignService } from "../../services/campaignService";
 import Background from "@/app/components/background";
 import { BackgroundProvider } from "@/app/components/context";
 import Header from "@/app/components/header";
+import Footer from "@/app/components/footer";
 import { useBackground } from "../../components/context";
 
 export default function PlayerBoardPage() {
@@ -221,6 +222,7 @@ export default function PlayerBoardPage() {
           ))}
         </div>
       </div>
+      <Footer />
     </div>
   );
 }
