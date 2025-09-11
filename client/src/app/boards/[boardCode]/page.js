@@ -15,8 +15,11 @@ export default function PlayerBoardPage() {
   const [boardData, setBoardData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [timeLeft, setTimeLeft] = useState(null); // For countdown
+  const [timeLeft, setTimeLeft] = useState(null);
   const { setSelectedPreset } = useBackground();
+
+  // Track player marking state (null=unmarked, "right", "wrong")
+  const [marks, setMarks] = useState([]);
 
   useEffect(() => {
     const fetchBoard = async () => {
@@ -26,6 +29,9 @@ export default function PlayerBoardPage() {
           const data = await res.json();
           setBoardData(data);
           setSelectedPreset(data.backgroundPreset);
+
+          // Initialize marking array
+          setMarks(Array(data.tiles.length).fill(null));
 
           // Initialize countdown
           if (data.startDateTime) {
@@ -55,31 +61,45 @@ export default function PlayerBoardPage() {
     if (boardCode) fetchBoard();
   }, [boardCode]);
 
-  if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
-      <div className="text-center">
-        <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-white mx-auto mb-4"></div>
-        <p>Loading board...</p>
+  if (loading)
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-white mx-auto mb-4"></div>
+          <p>Loading board...</p>
+        </div>
       </div>
-    </div>
-  );
+    );
 
-  if (error) return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
-      <div className="text-center">
-        <h1 className="text-3xl font-bold mb-4">Error</h1>
-        <p>{error}</p>
-        <button
-          onClick={() => router.push("/boards")}
-          className="mt-4 px-4 py-2 bg-red-500 rounded hover:bg-red-600"
-        >
-          Back
-        </button>
+  if (error)
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-900 text-white">
+        <div className="text-center">
+          <h1 className="text-3xl font-bold mb-4">Error</h1>
+          <p>{error}</p>
+          <button
+            onClick={() => router.push("/boards")}
+            className="mt-4 px-4 py-2 bg-red-500 rounded hover:bg-red-600"
+          >
+            Back
+          </button>
+        </div>
       </div>
-    </div>
-  );
+    );
 
   const { tiles, boardSize, campaignTitle } = boardData;
+
+  // Toggle mark state
+  const handleTileClick = (index) => {
+  setMarks((prev) => {
+    const next = [...prev];
+    if (next[index] === null) next[index] = "right";
+    else if (next[index] === "right") next[index] = "wrong";
+    else next[index] = null;
+    return next;
+  });
+};
+
 
   // Convert timeLeft in ms to human-readable
   const formatTimeLeft = (ms) => {
@@ -88,37 +108,79 @@ export default function PlayerBoardPage() {
     const hours = Math.floor(totalSeconds / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
     const seconds = totalSeconds % 60;
-    return `${hours.toString().padStart(2,"0")}:${minutes.toString().padStart(2,"0")}:${seconds.toString().padStart(2,"0")}`;
+    return `${hours.toString().padStart(2, "0")}:${minutes
+      .toString()
+      .padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
   };
 
-  const countdownDisplay = timeLeft > 0
-    ? `Starts in: ${formatTimeLeft(timeLeft)}`
-    : "This campaign is live!";
+  const countdownDisplay =
+    timeLeft && timeLeft > 0
+      ? `Starts in: ${formatTimeLeft(timeLeft)}`
+      : "This campaign is live!";
+
+  // Helper: check winning lines
+  const getWinningLines = () => {
+   const lines = [];
+    const size = boardSize;
+
+    // Rows
+    for (let r = 0; r < size; r++) {
+      const row = Array.from({ length: size }, (_, c) => r * size + c);
+      if (row.every((i) => marks[i] === "right")) lines.push(row);
+    }
+
+    // Columns
+    for (let c = 0; c < size; c++) {
+      const col = Array.from({ length: size }, (_, r) => r * size + c);
+      if (col.every((i) => marks[i] === "right")) lines.push(col);
+    }
+
+    // Diagonals
+    const diag1 = Array.from({ length: size }, (_, i) => i * size + i);
+    if (diag1.every((i) => marks[i] === "right")) lines.push(diag1);
+
+    const diag2 = Array.from({ length: size }, (_, i) => i * size + (size - 1 - i));
+    if (diag2.every((i) => marks[i] === "right")) lines.push(diag2);
+
+    return lines;
+  };
+
+  const winningLines = getWinningLines();
 
   return (
     <div className="min-h-screen">
-        <Background />
-        <Header />
-        <br /><br /><br />
+      <Background />
+      <Header />
+      <br />
+      <br />
+      <br />
 
-        <div className="max-w-5xl mx-auto">
-          <h1 className="text-3xl text-white font-bold mb-2">{campaignTitle}</h1>
-          <p className="text-gray-300 mb-6">{countdownDisplay}</p>
+      <div className="max-w-5xl mx-auto relative">
+        <h1 className="text-3xl text-white font-bold mb-2">{campaignTitle}</h1>
+        <p className="text-gray-300 mb-6">{countdownDisplay}</p>
 
-          <div
-            className="grid gap-4 mx-auto"
-            style={{ gridTemplateColumns: `repeat(${boardSize}, 1fr)` }}
-          >
-            {tiles.map((cell, index) => (
+        <div
+          className="grid gap-4 mx-auto relative"
+          style={{ gridTemplateColumns: `repeat(${boardSize}, 1fr)` }}
+        >
+          {tiles.map((cell, index) => {
+            const mark = marks[index];
+            return (
               <div
                 key={index}
-                className={`aspect-square border-2 rounded-xl flex items-center justify-center p-2 text-center transition-all ${
-                  cell.isCenter
-                    ? "bg-yellow-500/30 border-yellow-400 text-yellow-100"
-                    : cell.categoryItemId
-                    ? "bg-green-500/30 border-green-400 text-green-100"
-                    : "bg-white/10 border-white/30 text-white/50"
-                }`}
+                onClick={() => handleTileClick(index)}
+                className={`aspect-square border-2 rounded-xl flex items-center justify-center p-2 text-center cursor-pointer transition-all
+                  ${
+                    mark === "right"
+                      ? "bg-green-500/70 border-green-400 text-white"
+                      : mark === "wrong"
+                      ? "bg-red-500/70 border-red-400 text-white"
+                      : cell.isCenter
+                      ? "bg-yellow-500/30 border-yellow-400 text-yellow-100"
+                      : cell.categoryItemId
+                      ? "bg-white/10 border-white/30 text-white"
+                      : "bg-gray-800/50 border-gray-600 text-gray-400"
+                  }`}
               >
                 {cell.isCenter ? (
                   <div className="text-center">
@@ -126,14 +188,39 @@ export default function PlayerBoardPage() {
                     <div className="text-xs">{boardData.playerName || "Free Space"}</div>
                   </div>
                 ) : cell.categoryItemId ? (
-                  <div className="text-xs break-words">{cell.customText || cell.text}</div>
+                  <div className="text-xs break-words">
+                    {cell.customText || cell.text}
+                  </div>
                 ) : (
                   <div className="text-xs">Empty</div>
                 )}
               </div>
-            ))}
-          </div>
+            );
+          })}
+
+          {/* Overlay lines for winning bingos */}
+          {winningLines.map((line, i) => (
+            <svg
+              key={i}
+              className="absolute inset-0 pointer-events-none"
+              style={{ width: "100%", height: "100%" }}
+            >
+              <line
+                x1={`${(line[0] % boardSize) * (100 / boardSize) + 50 / boardSize}%`}
+                y1={`${Math.floor(line[0] / boardSize) * (100 / boardSize) + 50 / boardSize}%`}
+                x2={`${(line[line.length - 1] % boardSize) * (100 / boardSize) + 50 / boardSize}%`}
+                y2={`${
+                  Math.floor(line[line.length - 1] / boardSize) * (100 / boardSize) +
+                  50 / boardSize
+                }%`}
+                stroke="white"
+                strokeWidth="6"
+                strokeLinecap="round"
+              />
+            </svg>
+          ))}
         </div>
+      </div>
     </div>
   );
 }
