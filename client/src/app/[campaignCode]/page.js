@@ -9,6 +9,19 @@ import { BackgroundProvider, useBackground } from "../components/context";
 import Footer from "../components/footer";
 import Header from "../components/header";
 
+const createEmptyBoard = (size) => {
+  const board = Array(size * size).fill(null);
+  const centerIndex = Math.floor((size * size) / 2);
+  board[centerIndex] = { type: 'free', text: 'FREE SPACE', isCenter: true };
+  return board;
+};
+
+const campaignStatusDetails = {
+  open: { label: "Open", message: "Board submissions are open." },
+  locked: { label: "Entries locked", message: "Board creation is closed. Existing boards remain available." },
+  moderating: { label: "Moderating", message: "Outcomes are being reviewed. This campaign is read-only." },
+  completed: { label: "Completed", message: "This campaign is complete and read-only." },
+};
 
 export default function CampaignPage() {
   const { campaignCode } = useParams();
@@ -36,7 +49,7 @@ export default function CampaignPage() {
           const data = await response.json();
           console.log(data);
           setCampaign(data);
-          initializeBoard(data.boardSize);
+          setBoard(createEmptyBoard(data.boardSize));
           setSelectedPreset(data.backgroundPreset);
         } else if (response.status === 404) {
           setError("Campaign not found");
@@ -70,15 +83,7 @@ export default function CampaignPage() {
       fetchCampaign();
       fetchCampaignBoards();
     }
-  }, [campaignCode]);
-
-  const initializeBoard = (size) => {
-    const newBoard = Array(size * size).fill(null);
-    // Add free space in center
-    const centerIndex = Math.floor((size * size) / 2);
-    newBoard[centerIndex] = { type: 'free', text: 'FREE SPACE', isCenter: true };
-    setBoard(newBoard);
-  };
+  }, [campaignCode, setSelectedPreset]);
 
 const formatTimeAgo = (dateString) => {
     const date = new Date(dateString);
@@ -137,6 +142,7 @@ const renderMiniBoard = (boardData, boardSize) => {
   };
 
  const handleCategoryItemSelect = (category, item) => {
+  if (campaign.status !== "open") return;
   const categoryId = category.id;
 
   if (category.type === 'choose_many') {
@@ -207,6 +213,7 @@ const renderMiniBoard = (boardData, boardSize) => {
 };
 
   const handleBoardCellClick = (index) => {
+    if (campaign.status !== "open") return;
     // If there's a selected item from choose_many that's not on board, add it
     for (const [categoryId, items] of Object.entries(selectedItems)) {
       const category = campaign.categories.find(cat => cat.id.toString() === categoryId);
@@ -233,6 +240,7 @@ const renderMiniBoard = (boardData, boardSize) => {
   };
 
   const handleRemoveFromBoard = (index) => {
+    if (campaign.status !== "open") return;
     if (board[index] && !board[index].isCenter) {
       const newBoard = [...board];
       newBoard[index] = null;
@@ -241,6 +249,7 @@ const renderMiniBoard = (boardData, boardSize) => {
   };
 
   const handleDragStart = (e, index) => {
+    if (campaign.status !== "open") return;
     if (board[index]) {
       setDraggedItem({ item: board[index], fromIndex: index });
       e.dataTransfer.effectAllowed = 'move';
@@ -249,6 +258,7 @@ const renderMiniBoard = (boardData, boardSize) => {
 
 
   const handleDragOver = (e, index) => {
+    if (campaign.status !== "open") return;
     e.preventDefault();
     setHoveredCell(index);
   };
@@ -259,6 +269,7 @@ const renderMiniBoard = (boardData, boardSize) => {
 
   const handleDrop = (e, toIndex) => {
     e.preventDefault();
+    if (campaign.status !== "open") return;
     setHoveredCell(null);
 
     if (draggedItem && toIndex !== draggedItem.fromIndex) {
@@ -289,6 +300,7 @@ const renderMiniBoard = (boardData, boardSize) => {
   };
 
 const canFinalize = () => {
+  if (campaign.status !== "open") return false;
   if (!playerName.trim()) return false;
 
   // Check all required categories have selections
@@ -335,7 +347,8 @@ const canFinalize = () => {
         const data = await response.json();
         router.push(`/boards/${data.boardCode}`);
       } else {
-        alert("Error creating board. Please try again.");
+        const data = await response.json();
+        alert(data.error || "Error creating board. Please try again.");
       }
     } catch (error) {
       console.error("Error finalizing board:", error);
@@ -385,6 +398,12 @@ const canFinalize = () => {
     );
   }
 
+  const isOpen = campaign.status === "open";
+  const status = campaignStatusDetails[campaign.status] || {
+    label: campaign.status,
+    message: "This campaign is read-only.",
+  };
+
   return (
     <div className={`min-h-screen`}>
       <Header />
@@ -403,6 +422,9 @@ const canFinalize = () => {
           <div className="text-center">
             <h1 className="text-3xl font-bold text-white mb-1">{campaign.title}</h1>
             <p className="text-white/70">Code: {campaignCode}</p>
+            <span className="mt-2 inline-block rounded-md border border-white/30 bg-black/20 px-2.5 py-1 text-sm font-semibold text-white">
+              {status.label}
+            </span>
           </div>
           
           <div className="text-right text-white">
@@ -415,6 +437,14 @@ const canFinalize = () => {
               <span className="text-sm">{campaign.playerCount || 0} players</span>
             </div>
           </div>
+        </div>
+
+        <div className={`mb-6 border-l-4 px-4 py-3 text-sm ${
+          isOpen
+            ? "border-emerald-400 bg-emerald-400/10 text-emerald-100"
+            : "border-amber-400 bg-amber-400/10 text-amber-100"
+        }`}>
+          {status.message}
         </div>
 
         <div className="grid lg:grid-cols-6 gap-8">
@@ -450,6 +480,7 @@ const canFinalize = () => {
                         <button
                           key={item.id}
                           onClick={() => handleCategoryItemSelect(category, item)}
+                          disabled={!isOpen}
                           className={`aspect-square flex items-center justify-center text-center rounded-xl border-2 text-xs font-medium transition-all
                             ${
                               isItemSelected(category, item)
@@ -480,6 +511,7 @@ const canFinalize = () => {
                   type="text"
                   value={playerName}
                   onChange={(e) => setPlayerName(e.target.value)}
+                  disabled={!isOpen}
                   placeholder="Enter your name..."
                   className="w-full px-4 py-3 rounded-xl bg-white/10 text-white placeholder-gray-300 border-2 border-white/30 focus:border-blue-400 focus:ring-2 focus:ring-blue-500 transition-all"
                 />
@@ -498,7 +530,9 @@ const canFinalize = () => {
                   {board.map((cell, index) => (
                     <div
                       key={index}
-                      className={`aspect-square border-2 rounded-xl flex items-center justify-center p-2 text-center cursor-pointer transition-all ${
+                      className={`aspect-square border-2 rounded-xl flex items-center justify-center p-2 text-center transition-all ${
+                        isOpen ? "cursor-pointer" : "cursor-default"
+                      } ${
                         cell
                           ? cell.isCenter
                             ? "bg-yellow-500/30 border-yellow-400 text-yellow-100"
@@ -512,7 +546,7 @@ const canFinalize = () => {
                       onDragOver={(e) => handleDragOver(e, index)}
                       onDragLeave={handleDragLeave}
                       onDrop={(e) => handleDrop(e, index)}
-                      draggable={!!cell}
+                      draggable={isOpen && !!cell}
                     >
                       {cell ? (
                         <div className="relative w-full h-full flex items-center justify-center group">
@@ -526,6 +560,7 @@ const canFinalize = () => {
                                   setPlayerName(e.target.value);
                                   updatePlayerName(index, e.target.value);
                                 }}
+                                disabled={!isOpen}
                                 placeholder="Your Name"
                                 className="bg-transparent text-center text-xs w-full text-yellow-100 placeholder-yellow-200/50"
                               />
@@ -533,15 +568,17 @@ const canFinalize = () => {
                           ) : (
                             <>
                               <span className="text-xs font-medium break-words">{cell.text || cell.name}</span>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleRemoveFromBoard(index);
-                                }}
-                                className="absolute -top-1 -right-1 bg-red-500 hover:bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                              >
-                                <X className="w-3 h-3" />
-                              </button>
+                              {isOpen && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRemoveFromBoard(index);
+                                  }}
+                                  className="absolute -top-1 -right-1 bg-red-500 hover:bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                >
+                                  <X className="w-3 h-3" />
+                                </button>
+                              )}
                             </>
                           )}
                         </div>
@@ -553,17 +590,14 @@ const canFinalize = () => {
                 </div>
               </div>
 
-              {/* Instructions */}
-              <div className="bg-white/10 rounded-xl p-4 mb-6">
-                <h3 className="text-white font-semibold mb-2">Instructions:</h3>
-                <ul className="text-gray-300 text-sm space-y-1">
-                  <li>• Select items from categories on the left</li>
-                  <li>• Items will automatically fill empty board spaces</li>
-                  <li>• Drag and drop items to rearrange them (you can even move the free space!)</li>
-                  <li>• Click the ✕ on items to remove them</li>
-                  <li>• Fill required categories before finalizing</li>
-                </ul>
-              </div>
+              {isOpen && (
+                <div className="bg-white/10 rounded-xl p-4 mb-6">
+                  <h3 className="text-white font-semibold mb-2">Board requirements</h3>
+                  <p className="text-gray-300 text-sm">
+                    Fill every tile and include a selection from each required category.
+                  </p>
+                </div>
+              )}
 
               {/* Finalize Button */}
               <div className="flex justify-center">
@@ -578,7 +612,9 @@ const canFinalize = () => {
                       : "bg-gray-500/30 text-gray-300 border-gray-500/30 cursor-not-allowed"
                   }`}
                 >
-                  {finalizing ? (
+                  {!isOpen ? (
+                    "Board creation closed"
+                  ) : finalizing ? (
                     <div className="flex items-center">
                       <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-white mr-2"></div>
                       Creating Board...
@@ -592,7 +628,7 @@ const canFinalize = () => {
                 </motion.button>
               </div>
 
-              {!canFinalize() && (
+              {isOpen && !canFinalize() && (
                 <div className="text-center mt-4">
                   <p className="text-yellow-300 text-sm">
                     {!playerName.trim() && "Enter your name and "}
@@ -623,7 +659,9 @@ const canFinalize = () => {
                   <div className="text-center py-8">
                     <Users className="w-12 h-12 text-white/30 mx-auto mb-2" />
                     <p className="text-white/70 text-sm">No boards created yet</p>
-                    <p className="text-white/50 text-xs mt-1">Be the first to play!</p>
+                    <p className="text-white/50 text-xs mt-1">
+                      {isOpen ? "Be the first to play!" : "Entries are closed."}
+                    </p>
                   </div>
                 ) : (
                   campaignBoards.map((boardData) => (

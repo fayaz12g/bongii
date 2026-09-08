@@ -5,10 +5,17 @@ import { useParams, useRouter } from "next/navigation";
 import { User } from "lucide-react";
 import { campaignService } from "../../services/campaignService";
 import Background from "@/app/components/background";
-import { BackgroundProvider } from "@/app/components/context";
 import Header from "@/app/components/header";
 import Footer from "@/app/components/footer";
 import { useBackground } from "../../components/context";
+
+const statusDetails = {
+  open: { label: "Open", message: "Board submissions are still open." },
+  locked: { label: "Entries locked", message: "Submitted boards are now read-only." },
+  moderating: { label: "Moderating", message: "Campaign outcomes are being reviewed." },
+  completed: { label: "Completed", message: "This campaign has been finalized." },
+  cancelled: { label: "Cancelled", message: "This campaign was cancelled." },
+};
 
 export default function PlayerBoardPage() {
   const { boardCode } = useParams();
@@ -16,7 +23,6 @@ export default function PlayerBoardPage() {
   const [boardData, setBoardData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [timeLeft, setTimeLeft] = useState(null);
   const { setSelectedPreset } = useBackground();
 
   // Track player marking state (null=unmarked, "right", "wrong")
@@ -33,19 +39,6 @@ export default function PlayerBoardPage() {
 
           // Initialize marking array
           setMarks(Array(data.tiles.length).fill(null));
-
-          // Initialize countdown
-          if (data.startDateTime) {
-            const startTime = new Date(data.startDateTime).getTime();
-            const updateCountdown = () => {
-              const now = Date.now();
-              const diff = startTime - now;
-              setTimeLeft(diff > 0 ? diff : 0);
-            };
-            updateCountdown();
-            const interval = setInterval(updateCountdown, 1000);
-            return () => clearInterval(interval);
-          }
         } else if (res.status === 404) {
           setError("Board not found");
         } else {
@@ -60,7 +53,7 @@ export default function PlayerBoardPage() {
     };
 
     if (boardCode) fetchBoard();
-  }, [boardCode]);
+  }, [boardCode, setSelectedPreset]);
 
   if (loading)
     return (
@@ -102,22 +95,10 @@ export default function PlayerBoardPage() {
 };
 
 
-  // Convert timeLeft in ms to human-readable
-  const formatTimeLeft = (ms) => {
-    if (ms <= 0) return null;
-    const totalSeconds = Math.floor(ms / 1000);
-    const hours = Math.floor(totalSeconds / 3600);
-    const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = totalSeconds % 60;
-    return `${hours.toString().padStart(2, "0")}:${minutes
-      .toString()
-      .padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
+  const campaignStatus = statusDetails[boardData.campaignStatus] || {
+    label: boardData.campaignStatus,
+    message: "This submitted board is read-only.",
   };
-
-  const countdownDisplay =
-    timeLeft && timeLeft > 0
-      ? `Starts in: ${formatTimeLeft(timeLeft)}`
-      : "This campaign is live!";
 
   // Helper: check winning lines
   const getWinningLines = () => {
@@ -157,8 +138,13 @@ export default function PlayerBoardPage() {
       <br />
 
       <div className="max-w-5xl mx-auto relative">
-        <h1 className="text-3xl text-white font-bold mb-2">{campaignTitle}</h1>
-        <p className="text-gray-300 mb-6">{countdownDisplay}</p>
+        <div className="mb-6 flex flex-wrap items-center gap-3">
+          <h1 className="text-3xl text-white font-bold">{campaignTitle}</h1>
+          <span className="rounded-md border border-white/30 bg-black/20 px-2.5 py-1 text-sm font-semibold text-white">
+            {campaignStatus.label}
+          </span>
+        </div>
+        <p className="text-gray-300 mb-6">{campaignStatus.message}</p>
 
         <div
           className="grid gap-4 mx-auto relative"

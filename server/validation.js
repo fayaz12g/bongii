@@ -1,0 +1,76 @@
+const { z } = require('zod');
+
+const validationError = (result) => ({
+  error: 'Invalid request',
+  details: result.error.issues.map((issue) => ({
+    path: issue.path.join('.'),
+    message: issue.message,
+  })),
+});
+
+const validateBody = (schema) => (req, res, next) => {
+  const result = schema.safeParse(req.body);
+  if (!result.success) {
+    res.status(400).json(validationError(result));
+    return;
+  }
+  req.validatedBody = result.data;
+  next();
+};
+
+const requiredText = (maximum) => z.string().trim().min(1).max(maximum);
+const optionalEmail = z.union([z.string().trim().email(), z.literal('')]).optional();
+
+const schemas = {
+  register: z.object({
+    username: requiredText(50),
+    password: z.string().min(8).max(200),
+    firstName: requiredText(80),
+    lastName: requiredText(80),
+    email: optionalEmail,
+    profileIcon: z.string().trim().max(100).optional(),
+  }),
+  login: z.object({
+    username: requiredText(50),
+    password: z.string().min(1).max(200),
+  }),
+  profile: z.object({
+    firstName: requiredText(80),
+    lastName: requiredText(80),
+    email: optionalEmail,
+    profileIcon: z.string().trim().max(100).optional(),
+  }),
+  campaign: z.object({
+    title: requiredText(120),
+    description: z.string().trim().max(2000).optional(),
+    backgroundPreset: z.object({
+      id: z.union([z.number().int().positive(), z.literal('custom')]),
+      name: requiredText(80),
+      gradient: requiredText(200),
+      animation: requiredText(50),
+    }),
+    boardSize: z.union([z.literal(3), z.literal(4), z.literal(5)]),
+    startDateTime: requiredText(100),
+    categories: z.array(z.object({
+      name: requiredText(100),
+      type: z.enum(['choose_many', 'choose_one_required', 'choose_one_optional']),
+      required: z.boolean().optional().default(false),
+      items: z.array(requiredText(200)).min(1).max(200),
+    })).min(1).max(50),
+  }),
+  board: z.object({
+    playerName: requiredText(80),
+    selectedTiles: z.array(z.object({
+      categoryItemId: z.number().int().positive().nullable().optional(),
+      position: z.number().int().min(0).max(24),
+      isCenter: z.boolean().optional().default(false),
+      customText: z.string().trim().max(200).nullable().optional(),
+    })).min(1).max(25),
+  }),
+  callItem: z.object({
+    itemId: z.number().int().positive(),
+    status: z.enum(['correct', 'incorrect']),
+  }),
+};
+
+module.exports = { schemas, validateBody };

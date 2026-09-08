@@ -1,4 +1,4 @@
-# Bongii implementation plan
+# Bongii 2.0: Bring Back the Bong implementation plan
 
 This is the execution checklist for the product behavior in [PRODUCT_SPEC.md](PRODUCT_SPEC.md) and the architecture in [TECHNICAL_DESIGN.md](TECHNICAL_DESIGN.md).
 
@@ -30,42 +30,44 @@ Priority: `P0`
 
 Goal: make current behavior safe to extend and establish a fast regression check.
 
+Status: completed locally on 2026-09-08. The first GitHub-hosted CI run and production migration remain deployment checks.
+
 ### API and data cleanup
 
-- [ ] Split `server/index.js` into app creation, route modules, authentication middleware, and a server entry point.
-- [ ] Remove duplicate `GET /campaigns/:code` and `POST /campaigns` route declarations.
-- [ ] Implement and export the campaign status operation currently called by the start route, or remove that route in favor of the Phase 1 transition API.
-- [ ] Remove the unauthenticated `POST /api/clean` route from deployed builds.
-- [ ] Verify every referenced database method exists; remove unfinished RPG-style join fields and dead client service calls.
-- [ ] Return correct HTTP statuses: `400` validation, `401` unauthenticated, `403` unauthorized, `404` missing, and `409` invalid state transition.
-- [ ] Add request validation for campaign, board, item outcome, and profile payloads.
-- [ ] Enable SQLite foreign keys and use transactions for multi-row writes.
-- [ ] Stop returning password fields from user queries and stop logging user records or credentials.
+- [x] Split `server/index.js` into app creation, route modules, authentication middleware, and a server entry point.
+- [x] Remove duplicate `GET /campaigns/:code` and `POST /campaigns` route declarations.
+- [x] Implement and export the campaign status operation currently called by the start route.
+- [x] Remove the unauthenticated `POST /api/clean` route.
+- [x] Verify every referenced database method exists; remove unfinished RPG-style routes and dead client service calls.
+- [x] Return correct HTTP statuses: `400` validation, `401` unauthenticated, `403` unauthorized, `404` missing, and `409` invalid state transition.
+- [x] Add request validation for campaign, board, item outcome, and profile payloads.
+- [x] Enable SQLite foreign keys and use transactions for multi-row writes.
+- [x] Hash new passwords, upgrade legacy plaintext passwords on successful login, and exclude credentials from responses and logs.
 
 ### Configuration and migrations
 
-- [ ] Replace `/data/test.db` with a required `DATABASE_PATH` setting that has a documented local default.
-- [ ] Replace the client's hard-coded API host with `NEXT_PUBLIC_API_BASE_URL`.
-- [ ] Add `.env.example` files with non-secret placeholders.
-- [ ] Introduce ordered SQLite migration files and a `schema_migrations` table.
-- [ ] Document backup, migrate, verify, and rollback procedures for the Fly.io volume.
+- [x] Make the database path environment-driven, with a documented local default and the historical production path retained explicitly.
+- [x] Replace the client's hard-coded API host with `NEXT_PUBLIC_API_BASE_URL`.
+- [x] Add `.env.example` files with non-secret placeholders.
+- [x] Introduce ordered, checksummed SQLite migrations and a `schema_migrations` table.
+- [x] Document backup, migrate, verify, and rollback procedures for the Fly.io volume.
 
 ### Test baseline
 
-- [ ] Extract app creation so API tests can run without opening a network port.
-- [ ] Add a temporary SQLite database fixture.
-- [ ] Add one API smoke test for campaign creation and one for board creation.
-- [ ] Add an authorization regression test proving one user cannot moderate another user's campaign.
-- [ ] Add client lint and build commands that pass in CI.
-- [ ] Add a GitHub Actions workflow for server tests and the client build.
+- [x] Extract app creation so API tests can run without opening a network port.
+- [x] Add a temporary SQLite database fixture.
+- [x] Add API smoke coverage for campaign and board creation.
+- [x] Add an authorization regression test proving one user cannot moderate another user's campaign.
+- [x] Add client lint and build commands that pass locally and in CI.
+- [x] Add a GitHub Actions workflow for tests, lint, build, and production dependency audits.
 
 ### Acceptance checks
 
-- [ ] A fresh database migrates from zero to the current schema exactly once.
-- [ ] A copied production schema migrates without losing campaigns or boards.
-- [ ] No public endpoint can erase all data.
-- [ ] Local client and API startup require no source edits and never default to production.
-- [ ] The baseline CI workflow passes from a clean checkout.
+- [x] A fresh database migrates from zero to the current schema exactly once.
+- [x] A representative legacy schema migrates without losing its user or campaign data.
+- [x] No public endpoint can erase all data.
+- [x] Local client and API startup require no source edits and never default to production.
+- [x] The commands used by the baseline CI workflow pass locally; its first hosted run occurs after the changes are pushed.
 
 ## Phase 1: Authoritative campaign lifecycle
 
@@ -73,30 +75,32 @@ Priority: `P1`
 
 Goal: represent open entries, waiting for results, active moderation, and completed history as real server states.
 
+Status: completed locally on 2026-09-08. Production backup, migration `002_campaign_lifecycle.js`, deployment, and hosted CI remain release checks.
+
 ### Domain and database
 
-- [ ] Migrate existing `waiting` campaigns to `open`, `active` campaigns to `moderating`, and retain `completed`.
-- [ ] Add `draft`, `open`, `locked`, `moderating`, `completed`, and `cancelled` constraints.
-- [ ] Add lifecycle timestamps: `publishedAt`, `boardCreationClosedAt`, `moderationStartedAt`, `finalizedAt`, and `cancelledAt`.
-- [ ] Add a monotonically increasing campaign `version` for reconnect and stale-update detection.
-- [ ] Implement a single transition service containing the allowed state graph.
-- [ ] Make board creation transactional and legal only in `open`.
-- [ ] Prevent campaign category or board edits once entries are locked.
+- [x] Migrate existing `waiting` campaigns to `open`, `active` campaigns to `moderating`, and retain `completed`.
+- [x] Add `draft`, `open`, `locked`, `moderating`, `completed`, and `cancelled` constraints.
+- [x] Add lifecycle timestamps: `publishedAt`, `boardCreationClosedAt`, `moderationStartedAt`, `finalizedAt`, and `cancelledAt`.
+- [x] Add a monotonically increasing campaign `version` for reconnect and stale-update detection.
+- [x] Implement a single transition service containing the allowed state graph.
+- [x] Make board creation transactional and legal only in `open`.
+- [x] Prevent campaign category or board edits once entries are locked.
 
 ### API and client
 
-- [ ] Add moderator endpoints to publish, lock, reopen, start moderation, cancel, and later finalize.
-- [ ] Include allowed next actions in moderator campaign responses.
-- [ ] Add working lifecycle controls to `client/src/app/moderate/[campaignCode]/page.js`.
-- [ ] Show status and read-only state on campaign and board pages.
-- [ ] Replace date-derived labels such as "This campaign is live" with server state.
+- [x] Add moderator endpoints to publish, lock, reopen, start moderation, and cancel. Finalization remains in Phase 3 so scoring and completion commit atomically.
+- [x] Include allowed next actions in moderator campaign responses.
+- [x] Add working lifecycle controls to `client/src/app/moderate/[campaignCode]/page.js`.
+- [x] Show status and read-only state on campaign and board pages.
+- [x] Replace date-derived labels such as "This campaign is live" with server state.
 
 ### Acceptance checks
 
-- [ ] Two simultaneous board submissions at lock time cannot create a board after the lock commits.
-- [ ] Invalid transitions return `409` and leave data unchanged.
-- [ ] A non-owner receives `403` for every lifecycle mutation.
-- [ ] Existing campaign and board URLs continue to resolve after migration.
+- [x] Two simultaneous board submissions at lock time cannot create a board after the lock commits.
+- [x] Invalid transitions return `409` and leave data unchanged.
+- [x] A non-owner receives `403` for every lifecycle mutation.
+- [x] Existing campaign and board URLs continue to resolve after migration.
 
 ## Phase 2: Moderator-controlled real-time outcomes
 
@@ -123,6 +127,8 @@ Goal: one moderator decision updates every relevant board without player marking
 
 ### Moderator and board interfaces
 
+- [ ] Add import JSON when creating a campaign and example JSON download to
+  allow for AI generated campaigns (which import and can be modified before posting)
 - [ ] Build compact three-state item controls grouped by category.
 - [ ] Show pending and decided counts plus save, retry, and reconnect states.
 - [ ] Remove player tile click handlers and local `marks` state.
@@ -288,14 +294,14 @@ These are worthwhile after the core loop is reliable.
 | `P2` | Report and rate limits | Reduces spam in public campaign discovery |
 | `P2` | Privacy controls | Supports unlisted campaigns, public/private boards, and display-name consent |
 
-## First implementation slice
+## Completed Phase 0 slice
 
-Start with one small vertical slice from Phase 0:
+The initial implementation slice is complete:
 
-1. Make database and API URLs environment-driven.
-2. Introduce a temporary test database and app factory.
-3. Remove or protect the cleanup endpoint.
-4. Add one passing campaign API smoke test.
-5. Run the client production build in CI.
+1. Database and API URLs are environment-driven.
+2. API tests use a temporary database and app factory.
+3. The cleanup endpoint is removed.
+4. Campaign, board, authorization, credentials, and migration regressions are covered.
+5. CI runs server tests, client lint/build, and production dependency audits.
 
-That slice provides a reliable base for the lifecycle migration without changing game rules at the same time.
+This provides the base for the Phase 1 lifecycle migration without changing game rules at the same time.

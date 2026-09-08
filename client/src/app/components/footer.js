@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Github, Volume2, VolumeX, Image, PaintBucket, Snowflake, Check } from "lucide-react";
+import { Github, Volume2, VolumeX, Image as ImageIcon, PaintBucket, Snowflake, Check } from "lucide-react";
 import { useMusic } from "./music";
 import { useBackground } from "./context";
 
@@ -25,8 +25,8 @@ const Footer = () => {
   ];
 
   return (
-    <footer className="bg-red-900/0 fixed bottom-5 left-0 right-0">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <footer className="relative mt-12 bg-red-900/0 pb-5">
+      <div className="relative min-h-14 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Left socials */}
         <div className="flex space-x-6 absolute left-1 mb-10">
           {socialLinks.map(({ icon: Icon, href, label }) => (
@@ -123,7 +123,7 @@ const Footer = () => {
               className="p-3 rounded-full bg-white/10 hover:bg-white/20 border border-white/30 text-white transition-all"
               aria-label="Open Landscape Menu"
             >
-              <Image className="w-6 h-6" />
+              <ImageIcon className="w-6 h-6" />
             </button>
           </div>
 

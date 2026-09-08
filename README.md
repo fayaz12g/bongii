@@ -4,18 +4,19 @@ Bongii is moderator-led prediction bingo. Players build a board while a campaign
 
 Try the deployed app at [bongii.fayaz.one](https://bongii.fayaz.one).
 
-> Status: early alpha. Campaign and board creation work, but authoritative real-time moderation, final scoring, leaderboards, and Firebase Authentication are planned work, not shipped features.
+> Status: early alpha. Phase 0 stabilization and Phase 1 campaign lifecycle are complete locally. Real-time moderation, final scoring, leaderboards, and Firebase Authentication remain planned work.
 
 ## Current capabilities
 
-- Register and sign in with a local username and password.
+- Register and sign in with a bcrypt-hashed local username and password.
 - Create a campaign with categories, items, a board size, and a start time.
+- Publish, lock, reopen, moderate, or cancel a campaign through owner-only lifecycle controls.
 - Browse campaigns and create an anonymous board with a shareable code.
-- View campaign and board pages.
+- View lifecycle status and read-only campaign and board states.
 - Persist moderator item outcomes through the API.
 - Edit a basic local profile and choose a preset avatar.
 
-The current board page still lets each viewer mark tiles only in local React state. Those marks are lost on refresh and are not authoritative. The moderation page does not yet expose working start, outcome, or finalization controls.
+The current board page still lets each viewer mark tiles only in local React state. Those marks are lost on refresh and are not authoritative. Moderator outcome controls, real-time updates, and finalization remain future phases.
 
 ## Plans and specifications
 
@@ -24,15 +25,16 @@ The current board page still lets each viewer mark tiles only in local React sta
 | [Product specification](docs/PRODUCT_SPEC.md) | Campaign states, moderation rules, colors, scoring, leaderboard behavior, and UX requirements |
 | [Implementation plan](docs/IMPLEMENTATION_PLAN.md) | Prioritized milestones, task checklists, acceptance criteria, and suggested follow-up features |
 | [Technical design](docs/TECHNICAL_DESIGN.md) | Database migration, REST and Socket.IO contracts, finalization transaction, Firebase Auth, testing, and rollout |
+| [Operations runbook](docs/OPERATIONS.md) | Environment variables, migrations, production backup checks, release verification, and rollback |
 
-The next development milestone is Phase 0 in the implementation plan: stabilize the existing API, introduce repeatable SQLite migrations and tests, and close the current security gaps before adding real-time behavior.
+The next development milestone is Phase 2 in the implementation plan: add moderator-controlled, real-time item outcomes and authoritative board rendering.
 
 ## Architecture
 
 | Area | Current technology |
 | --- | --- |
-| Web client | Next.js 15, React 19, Tailwind CSS 3, Framer Motion |
-| API | Node.js, Express 4 |
+| Web client | Next.js 16, React 19, Tailwind CSS 3, Framer Motion |
+| API | Node.js, Express 5 |
 | Data | SQLite on a Fly.io persistent volume |
 | Authentication | Temporary custom JWT flow backed by SQLite |
 | Real-time transport | Not implemented; Socket.IO is planned |
@@ -57,11 +59,10 @@ bongii/
 Install each application separately:
 
 ```bash
-cd server
-npm install
-
-cd ../client
-npm install
+cp server/.env.example server/.env
+cp client/.env.example client/.env.local
+npm --prefix server ci
+npm --prefix client ci
 ```
 
 Run the API on port `3000`:
@@ -80,18 +81,21 @@ npm run dev
 
 Then open [http://localhost:3001](http://localhost:3001).
 
-Local setup is not fully portable yet: the API currently hard-codes `/data/test.db`, and the client currently defaults to the deployed API URL. Phase 0 replaces those values with `DATABASE_PATH` and `NEXT_PUBLIC_API_BASE_URL` environment variables. Until that work lands, take care not to point local development at production data.
+Local development defaults to `server/data/bongii.db` and `http://localhost:3000`. Deployments must set `NEXT_PUBLIC_API_BASE_URL`; they never inherit a production API fallback from source code. See the [operations runbook](docs/OPERATIONS.md) for all environment variables.
 
 ## Available commands
 
 | Directory | Command | Purpose |
 | --- | --- | --- |
 | `client` | `npm run dev` | Start Next.js on port 3001 |
+| `client` | `npm run lint` | Run the Next.js ESLint rules |
 | `client` | `npm run build` | Create a production client build |
 | `client` | `npm run start` | Run the production client build |
 | `server` | `npm start` | Start Express on port 3000 |
+| `server` | `npm test` | Run API, authorization, and migration tests |
+| `server` | `npm run db:migrate` | Apply pending SQLite migrations without starting HTTP |
 
-There is currently no automated test command. Adding unit, API integration, and multi-client end-to-end tests is part of Phases 0 through 3.
+GitHub Actions runs server tests, client lint and build, and production dependency audits on pushes to `main` and pull requests.
 
 ## Deployment
 
@@ -102,8 +106,8 @@ cd server
 fly deploy
 ```
 
-The SQLite database lives on the Fly.io volume mounted at `/data`. Back up that volume before applying future schema migrations.
+The SQLite database lives at the historical `/data/test.db` path on the Fly.io volume. Back up that volume before applying schema migrations and follow [docs/OPERATIONS.md](docs/OPERATIONS.md) for verification and rollback.
 
 ## Security warning
 
-The current authentication implementation stores passwords without hashing, stores its JWT in browser local storage, and exposes a database cleanup route without authorization. Do not treat the current build as production-ready. The implementation plan makes removal of the cleanup route and migration away from local passwords blocking Phase 0 and authentication work.
+New and successfully migrated legacy passwords are bcrypt-hashed, user responses never include password fields, and the old database cleanup endpoint has been removed. Authentication is still transitional: JWTs remain in browser local storage and there is no email verification or password recovery. Phase 5 replaces this flow with Firebase Authentication.

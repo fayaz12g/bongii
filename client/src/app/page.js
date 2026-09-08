@@ -6,21 +6,11 @@ import Background from "./components/background";
 import Footer from "./components/footer";
 import { motion, AnimatePresence } from "framer-motion";
 import { Upload, Play, Loader2 } from "lucide-react";
-import { setServerBase } from "./utils/config";
 import { profileService } from "./services/profileService";
-import { BackgroundProvider } from "./components/context";
 
 export default function Home() {
   const router = useRouter();
-  const [server, setServer] = useState("production");
-  const [showServer, setShowServer] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-
-  const handleServerChange = (e) => {
-    const selected = e.target.value;
-    setServer(selected);
-    setServerBase(selected);
-  };
 
   const handleCreateSubmit = async () => {
     setIsLoading(true);
@@ -65,7 +55,6 @@ export default function Home() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               className="flex justify-center items-center mb-20"
-              onClick={() => setShowServer(!showServer)}
             >
               <img
                 src="/logo.png"
@@ -96,24 +85,6 @@ export default function Home() {
               <span className="text-lg font-semibold">Create</span>
             </motion.button>
 
-            {/* Server Selector */}
-            {/* {showServer && (
-              <div>
-                <h1 className="text-2xl font-bold mb-4">Select Server</h1>
-                <select
-                  value={server}
-                  onChange={handleServerChange}
-                  className="p-2 border rounded"
-                >
-                  <option value="production">
-                    Bongii (https://bongii.fly.dev)
-                  </option>
-                  <option value="localhost">
-                    Localhost (http://localhost:3000)
-                  </option>
-                </select>
-              </div>
-            )} */}
           </div>
         </div>
         <Footer />

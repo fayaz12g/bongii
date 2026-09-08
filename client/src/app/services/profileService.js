@@ -22,8 +22,6 @@ export const profileService = {
         lastName: userData.lastName,
         email: userData.email,
         profileIcon: userData.profileIcon,
-        username: userData.username,
-        password: userData.password,
       }),
       headers: {
         "Content-type": "application/json; charset=UTF-8",

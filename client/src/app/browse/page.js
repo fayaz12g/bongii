@@ -4,30 +4,33 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import Header from "../components/header";
 import Background from "../components/background";
-import { BackgroundProvider } from "../components/context";
 import Footer from "../components/footer";
 import { campaignService } from "../services/campaignService";
+
+const statusLabels = {
+  open: "Open",
+  locked: "Entries locked",
+  moderating: "Moderating",
+  completed: "Completed",
+};
 
 export default function Browse() {
   const [campaigns, setCampaigns] = useState([]);
 
-  const loadCampaigns = async () => {
-    try {
-      const res = await campaignService.getCampaigns();
-      if (!res.ok) {
-        console.error("Failed to fetch campaigns");
-        return;
-      }
-      const data = await res.json();
-      console.log("Fetched campaigns:", data);
-      setCampaigns(data);
-    } catch (err) {
-      console.error("Error loading campaigns:", err);
-    }
-  };
-
   useEffect(() => {
-    loadCampaigns();
+    let active = true;
+
+    campaignService.getCampaigns().then(async (response) => {
+      if (!response.ok) throw new Error("Failed to fetch campaigns");
+      const data = await response.json();
+      if (active) setCampaigns(data);
+    }).catch((error) => {
+      console.error("Error loading campaigns:", error);
+    });
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   return (
@@ -67,6 +70,9 @@ export default function Browse() {
                   <p className="text-sm text-gray-400">
                     Code: <span className="font-mono">{c.code}</span>
                   </p>
+                  <span className="mt-3 inline-block rounded-md border border-white/25 bg-black/20 px-2 py-1 text-xs font-semibold text-white">
+                    {statusLabels[c.status] || c.status}
+                  </span>
                 </div>
               </Link>
             ))}

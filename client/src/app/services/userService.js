@@ -1,12 +1,6 @@
 import { getServerPath } from '../utils/config';
 
 export const userService = {
-
-  async getUsers() {
-    const res = await fetch(`${getServerPath()}/users`);
-    return Promise.resolve(res.json());
-  },
-
   async addUser(firstName, lastName, username, password, email, profileIcon) {
     const res = await fetch(`${getServerPath()}/users`, {
       method: "POST",

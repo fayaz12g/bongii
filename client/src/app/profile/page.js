@@ -1,10 +1,9 @@
 "use client";
 import { useState, useEffect } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { profileService } from '../services/profileService';
 import Header from '../components/header';
 import dynamic from "next/dynamic";
-import { BackgroundProvider } from "../components/context";
 
 const Background = dynamic(() => import("../components/background"), { ssr: false });
 const Footer = dynamic(() => import("../components/footer"), { ssr: false });
@@ -16,7 +15,6 @@ export default function ProfilePage() {
     lastName: '',
     username: '',
     email: '',
-    password: '',
     profileIcon: '1'
   });
   const [isLoading, setIsLoading] = useState(true);
@@ -68,13 +66,11 @@ export default function ProfilePage() {
   if (isLoading) {
     return (
       <div>
-        <BackgroundProvider>
-          <Header />
-          <Background />
-          <div className="flex justify-center items-center min-h-screen">
-            <div className="text-white">Loading...</div>
-          </div>
-        </BackgroundProvider>
+        <Header />
+        <Background />
+        <div className="flex justify-center items-center min-h-screen">
+          <div className="text-white">Loading...</div>
+        </div>
       </div>
     );
   }
@@ -156,19 +152,6 @@ export default function ProfilePage() {
                 name="email"
                 value={userData.email}
                 onChange={handleInputChange}
-                className="w-full p-3 rounded bg-gray-700 text-white border border-gray-600 focus:border-purple-500 focus:outline-none"
-              />
-            </div>
-
-            {/* Password Field */}
-            <div>
-              <label className="block text-white text-lg mb-2">Password</label>
-              <input
-                type="password"
-                name="password"
-                value={userData.password}
-                onChange={handleInputChange}
-                placeholder="Enter new password"
                 className="w-full p-3 rounded bg-gray-700 text-white border border-gray-600 focus:border-purple-500 focus:outline-none"
               />
             </div>

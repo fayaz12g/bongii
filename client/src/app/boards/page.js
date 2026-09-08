@@ -4,30 +4,33 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import Header from "../components/header";
 import Background from "../components/background";
-import { BackgroundProvider } from "../components/context";
 import Footer from "../components/footer";
 import { campaignService } from "../services/campaignService";
+
+const statusLabels = {
+  open: "Open",
+  locked: "Entries locked",
+  moderating: "Moderating",
+  completed: "Completed",
+};
 
 export default function BrowseBoards() {
   const [boards, setBoards] = useState([]);
 
-  const loadBoards = async () => {
-    try {
-      const res = await campaignService.getAllBoards(); // You need this endpoint
-      if (!res.ok) {
-        console.error("Failed to fetch boards");
-        return;
-      }
-      const data = await res.json();
-      console.log("Fetched boards:", data);
-      setBoards(data);
-    } catch (err) {
-      console.error("Error loading boards:", err);
-    }
-  };
-
   useEffect(() => {
-    loadBoards();
+    let active = true;
+
+    campaignService.getAllBoards().then(async (response) => {
+      if (!response.ok) throw new Error("Failed to fetch boards");
+      const data = await response.json();
+      if (active) setBoards(data);
+    }).catch((error) => {
+      console.error("Error loading boards:", error);
+    });
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   // Group boards by campaign
@@ -79,6 +82,9 @@ export default function BrowseBoards() {
                         <p className="text-sm text-gray-400">
                           Code: <span className="font-mono">{board.boardCode}</span>
                         </p>
+                        <span className="mt-3 inline-block rounded-md border border-white/25 bg-black/20 px-2 py-1 text-xs font-semibold text-white">
+                          {statusLabels[board.campaignStatus] || board.campaignStatus}
+                        </span>
                       </div>
                     </Link>
                   ))}

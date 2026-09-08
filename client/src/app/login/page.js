@@ -11,7 +11,7 @@ export default function LoginPage() {
   const [responseGet, setResponseGet] = useState(null);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [isFormValid, setIsFormValid] = useState(false);
+  const isFormValid = Boolean(username && password);
 
   useEffect(() => {
     // Check if user is logged in
@@ -20,11 +20,6 @@ export default function LoginPage() {
       router.push("/home");
     }
   }, [router]);
-
-  // Check if all required fields are filled
-  useEffect(() => {
-    setIsFormValid(username && password);
-  }, [username, password]);
 
   const handleSubmit = (username, password) => {
     if (username && password) {
@@ -116,7 +111,7 @@ export default function LoginPage() {
         {/* Register Area */}
         <div className="mt-6 text-center">
           <p className="text-white">
-            Don't have an account?{" "}
+            Don&apos;t have an account?{" "}
             <button
               onClick={() => router.push("/register")}
               className="underline text-blue-400 hover:text-blue-300 font-medium"

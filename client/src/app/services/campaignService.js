@@ -96,6 +96,7 @@ export const campaignService = {
       method: "POST",
       body: JSON.stringify({
         title: payload.title,
+        description: payload.description,
         backgroundPreset: payload.backgroundPreset,
         boardSize: payload.boardSize,
         startDateTime: payload.startDateTime,
@@ -144,26 +145,28 @@ export const campaignService = {
     }
   },
 
-  // Update player board tiles
-  async updatePlayerBoard(boardCode, payload) {
-    const res = await fetch(`${getServerPath()}/boards/${boardCode}`, {
-      method: "PUT",
-      body: JSON.stringify({
-        tiles: payload.tiles, // array of tile updates
-        playerName: payload.playerName,
-      }),
+  async getModeratorCampaign(campaignCode) {
+    return fetch(`${getServerPath()}/moderate/campaigns/${campaignCode}`, {
+      method: "GET",
       headers: {
         "Content-type": "application/json; charset=UTF-8",
         "Authorization": `Bearer ${localStorage.getItem("token")}`
       }
     });
-
-    return Promise.resolve(res);
   },
 
-  // Start campaign (moderator only)
-  async startCampaign(campaignCode) {
-    const res = await fetch(`${getServerPath()}/campaigns/${campaignCode}/start`, {
+  async transitionCampaign(campaignCode, action) {
+    const paths = {
+      publish: "publish",
+      lock: "lock",
+      reopen: "reopen",
+      startModeration: "moderation",
+      cancel: "cancel",
+    };
+    const path = paths[action];
+    if (!path) throw new Error(`Unknown campaign action: ${action}`);
+
+    const res = await fetch(`${getServerPath()}/campaigns/${campaignCode}/${path}`, {
       method: "POST",
       headers: {
         "Content-type": "application/json; charset=UTF-8",
@@ -171,7 +174,7 @@ export const campaignService = {
       }
     });
 
-    return Promise.resolve(res);
+    return res;
   },
 
   // Call item correct/incorrect (moderator only)
@@ -189,23 +192,6 @@ export const campaignService = {
     });
 
     return Promise.resolve(res);
-  },
-
-  // Get campaign results/winners
-  async getCampaignResults(campaignCode) {
-    try {
-      const response = await fetch(`${getServerPath()}/campaigns/${campaignCode}/results`, {
-        method: 'GET',
-        headers: {
-          "Content-type": "application/json; charset=UTF-8",
-          "Authorization": `Bearer ${localStorage.getItem("token")}`
-        },
-      });
-      return response;
-    } catch (error) {
-      console.error('Error fetching campaign results:', error);
-      throw error;
-    }
   },
 
   // Delete campaign
@@ -232,21 +218,5 @@ export const campaignService = {
     });
 
     return Promise.resolve(res);
-  },
-
-  // Get background presets
-  async getBackgroundPresets() {
-    try {
-      const response = await fetch(`${getServerPath()}/background-presets`, {
-        method: 'GET',
-        headers: {
-          "Content-type": "application/json; charset=UTF-8",
-        },
-      });
-      return response;
-    } catch (error) {
-      console.error('Error fetching background presets:', error);
-      throw error;
-    }
   }
 };

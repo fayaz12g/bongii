@@ -40,10 +40,10 @@ const HomePage = () => {
             Players can join campaigns using a unique code and build their own boards by selecting tiles:
           </p>
           <ul className="list-disc list-inside text-gray-300 space-y-1">
-            <li>Select tiles from "choose many" or "select one" categories.</li>
+            <li>Select tiles from &quot;choose many&quot; or &quot;select one&quot; categories.</li>
             <li>Rearrange tiles and customize your free space with your name.</li>
             <li>Play in real-time as the campaign progresses, with tiles marked correct or incorrect live.</li>
-            <li>Compete to spell "BONGII" across your board for the win!</li>
+            <li>Compete to spell &quot;BONGII&quot; across your board for the win!</li>
           </ul>
         </section>
 
@@ -54,7 +54,7 @@ const HomePage = () => {
           </p>
           <ul className="list-disc list-inside text-gray-300 space-y-1">
             <li>Assign correct or incorrect to tiles in real-time.</li>
-            <li>Track the progress of all players' boards simultaneously.</li>
+            <li>Track the progress of all players&apos; boards simultaneously.</li>
             <li>End the campaign and declare the winner based on completed BONGII rows.</li>
           </ul>
         </section>

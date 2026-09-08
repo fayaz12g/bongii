@@ -20,17 +20,17 @@ const Header = () => {
 
   useEffect(() => {
     const token = localStorage.getItem('token');
-    setLoggedIn(!!token);
+    if (!token) return;
 
-    if (token) {
-      // Optionally verify token by fetching user data
-      profileService.getUserData().then(response => {
-        if (!response.ok) {
-          localStorage.removeItem('token');
-          setLoggedIn(false);
-        }
-      });
-    }
+    profileService.getUserData().then((response) => {
+      if (response.ok) {
+        setLoggedIn(true);
+      } else {
+        localStorage.removeItem('token');
+      }
+    }).catch(() => {
+      localStorage.removeItem('token');
+    });
   }, []);
 
   const toggleMenu = () => setIsOpen(!isOpen);

@@ -1,6 +1,6 @@
 // context.js
 "use client";
-import { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useContext, useState } from "react";
 
 const BackgroundContext = createContext();
 
@@ -18,13 +18,6 @@ export const BackgroundProvider = ({ children, selectedPreset: initialPreset }) 
   const [showGradient, setShowGradient] = useState(true);
   const [selectedPreset, setSelectedPreset] = useState(initialPreset || backgroundPresets[0]);
 
-   // Sync prop -> state
-  useEffect(() => {
-    if (initialPreset) {
-      setSelectedPreset(initialPreset);
-    }
-  }, [initialPreset]);
-  
   return (
     <BackgroundContext.Provider
       value={{ showDots, setShowDots, showGradient, setShowGradient, selectedPreset, setSelectedPreset, backgroundPresets }}

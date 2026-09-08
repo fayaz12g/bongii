@@ -2,22 +2,22 @@
 
 This document describes the target implementation for the product rules in [PRODUCT_SPEC.md](PRODUCT_SPEC.md). It is intentionally specific enough to turn into small pull requests, but endpoint and column names may change during Phase 0 cleanup.
 
-## Current-state audit
+## Pre-Phase 0 audit
 
-The existing implementation has useful campaign, category, item, board, and tile tables, but several advertised capabilities are prototypes or dead paths:
+The initial implementation had useful campaign, category, item, board, and tile tables, but several advertised capabilities were prototypes or dead paths:
 
-- `server/index.js` declares campaign retrieval and creation routes twice.
-- The start route calls `database.updateCampaignStatus`, which is not exported or implemented.
-- The client has a results service method, but the server has no results route.
+- `server/index.js` declared campaign retrieval and creation routes twice.
+- The start route called `database.updateCampaignStatus`, which was not exported or implemented.
+- The client had a results service method, but the server had no results route.
 - Item outcomes can be written through REST, but the moderation page has no controls and there is no push transport.
 - The board page owns a local `marks` array and lets viewers mark their own tiles.
 - Board queries already join each tile to its campaign item's status, which is the correct source for authoritative display.
-- SQLite initialization mixes schema creation and unconditional ad hoc migration attempts.
-- Passwords are stored and compared as plain text; full user rows can be returned and logged.
-- `POST /api/clean` is unauthenticated.
-- There is no automated test suite.
+- SQLite initialization mixed schema creation and unconditional ad hoc migration attempts.
+- Passwords were stored and compared as plain text; full user rows could be returned and logged.
+- `POST /api/clean` was unauthenticated.
+- There was no automated test suite.
 
-Phase 0 addresses these defects before new game behavior is layered on top.
+Phase 0 resolved the duplicate and dead routes, missing status operation, startup schema mutation, plaintext password writes, credential exposure, cleanup endpoint, and missing test baseline. Results, real-time transport, and authoritative board rendering intentionally remain in later phases.
 
 ## Design principles
 

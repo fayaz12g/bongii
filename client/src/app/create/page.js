@@ -109,13 +109,13 @@ useEffect(() => {
     const customThemeObject = {
       id: 'custom',
       name: customTheme.name || 'Custom Theme',
-      gradient: getCustomGradient(),
+      gradient: customTheme.selectedGradient || 'from-blue-400 via-blue-600 to-blue-800',
       animation: customTheme.animation
     };
     setSelectedPreset(customThemeObject);
     console.log("Custom theme applied:", customThemeObject);
   }
-}, [customTheme, themeMode]);
+}, [customTheme, themeMode, setSelectedPreset]);
 
   useEffect(() => {
     // Check if user is logged in
@@ -125,11 +125,6 @@ useEffect(() => {
     }
   }, [router]);
 
-  // Generate custom gradient string
-  const getCustomGradient = () => {
-    return customTheme.selectedGradient || validGradientCombinations[0].gradient;
-  };
-
   // Get current theme (preset or custom)
   const getCurrentTheme = () => {
     if (themeMode === 'preset') {
@@ -138,7 +133,7 @@ useEffect(() => {
       return {
         id: 'custom',
         name: customTheme.name || 'Custom Theme',
-        gradient: getCustomGradient(),
+        gradient: customTheme.selectedGradient || validGradientCombinations[0].gradient,
         animation: customTheme.animation
       };
     }
@@ -204,7 +199,7 @@ useEffect(() => {
         const data = await response.json();
         // Show success with campaign code
         alert(`Campaign created! Your code is: ${data.campaign.code}`);
-        router.push(`/${data.campaign.code}`); // Redirect to build a board there
+        router.push(`/moderate/${data.campaign.code}`);
       } else {
         alert("Error creating campaign. Please try again.");
       }
@@ -233,6 +228,13 @@ useEffect(() => {
       default: return "bg-gray-500/20 border-gray-400";
     }
   };
+
+  const requiredItemCount = (boardSize * boardSize) - 1;
+  const selectableItemCount = categories.reduce(
+    (total, category) => total + category.items.length,
+    0,
+  );
+  const hasEnoughItems = selectableItemCount >= requiredItemCount;
 
   return (
 
@@ -698,12 +700,17 @@ useEffect(() => {
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.97 }}
                     onClick={() => setStep(4)}
-                    disabled={categories.length === 0}
+                    disabled={!hasEnoughItems}
                     className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-8 py-3 rounded-xl font-semibold border-3 border-white/30 hover:border-white/50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                   >
                     Review & Create
                   </motion.button>
                 </div>
+                {!hasEnoughItems && (
+                  <p className="mt-3 text-right text-sm text-amber-200">
+                    Add {requiredItemCount - selectableItemCount} more selectable item{requiredItemCount - selectableItemCount === 1 ? "" : "s"} for a {boardSize}x{boardSize} board.
+                  </p>
+                )}
               </motion.div>
             )}
 
@@ -783,7 +790,7 @@ useEffect(() => {
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.97 }}
                     onClick={handleCreateCampaign}
-                    disabled={loading}
+                    disabled={loading || !hasEnoughItems}
                     className="bg-gradient-to-r from-green-500 to-green-600 text-white px-8 py-4 rounded-xl font-semibold border-3 border-white/30 hover:border-white/50 disabled:opacity-50 transition-all"
                   >
                     {loading ? "Creating..." : "Create Campaign"}

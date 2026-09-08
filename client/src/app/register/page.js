@@ -1,31 +1,25 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { userService } from "../services/userService";
 import Background from "../components/background";
-import { BackgroundProvider } from "../components/context";
 import Footer from "../components/footer";
 
 export default function RegisterPage() {
   const router = useRouter();
-  const [responseGet, setResponseGet] = useState(null);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [email, setEmail] = useState("");
-  const [isFormValid, setIsFormValid] = useState(false);
   const [profileIcon, setProfileIcon] = useState("1");
-
-  useEffect(() => {
-    setIsFormValid(firstName && lastName && username && password);
-  }, [firstName, lastName, username, password]);
+  const isFormValid = Boolean(firstName && lastName && username && password.length >= 8);
 
   const handleSubmit = () => {
     if (!isFormValid) return;
 
     userService
-      .addUser(firstName, lastName, username, password, email)
+      .addUser(firstName, lastName, username, password, email, profileIcon)
       .then((response) => {
         if (response.ok) {
           // Auto login after registration
@@ -109,9 +103,10 @@ export default function RegisterPage() {
           {/* Password */}
           <input
             type="password"
-            placeholder="Password"
+            placeholder="Password (8+ characters)"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+            minLength={8}
             className="w-full px-4 py-3 rounded-xl border bg-white/10 text-white placeholder-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-400"
           />
 
@@ -148,9 +143,6 @@ export default function RegisterPage() {
             </button>
           </div>
 
-          {responseGet && (
-            <p className="text-sm text-red-500 mt-2 text-center">{responseGet}</p>
-          )}
         </form>
 
         {/* Login link */}

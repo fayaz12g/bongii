@@ -1,53 +1,46 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { usePathname, useRouter } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import Link from "next/link";
 import { campaignService } from "../services/campaignService";
 import Footer from "../components/footer";
 import Background from "../components/background";
-import { BackgroundProvider } from "../components/context";
 import Header from "../components/header";
+
+const statusLabels = {
+  draft: "Draft",
+  open: "Open",
+  locked: "Entries locked",
+  moderating: "Moderating",
+  completed: "Completed",
+  cancelled: "Cancelled",
+};
 
 export default function Moderate() {
   const router = useRouter();
   const [campaigns, setCampaigns] = useState([]);
 
-  const loadCampaigns = async () => {
-    try {
-      const res = await campaignService.getUserCampaigns();
-      const data = await res.json();
-      setCampaigns(data);
-    } catch (err) {
-      console.error("Error loading campaigns:", err);
-    }
-  };
-
   useEffect(() => {
-    // Check if user is logged in
     const token = localStorage.getItem("token");
     if (!token) {
       router.push("/login");
+      return;
     }
-    else {
-      loadCampaigns();
-    }
-  }, [router]);
 
-  const handleDelete = async (code) => {
-    if (!confirm("Are you sure you want to delete this campaign?")) return;
-    try {
-      const res = await campaignService.deleteCampaign(code);
-      if (res.ok) {
-        setCampaigns((prev) => prev.filter((c) => c.code !== code));
-      } else {
-        const err = await res.json();
-        alert(err.error || "Failed to delete campaign");
-      }
-    } catch (err) {
-      console.error("Error deleting campaign:", err);
-    }
-  };
+    let active = true;
+    campaignService.getUserCampaigns().then(async (response) => {
+      if (!response.ok) throw new Error("Failed to load campaigns");
+      const data = await response.json();
+      if (active) setCampaigns(data);
+    }).catch((error) => {
+      console.error("Error loading campaigns:", error);
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [router]);
 
   return (
     <div>
@@ -97,15 +90,17 @@ export default function Moderate() {
                     <p className="text-sm text-gray-400">
                       Players: {c.playerCount || 0}
                     </p>
+                    <p className="mt-2 text-sm font-semibold text-white">
+                      {statusLabels[c.status] || c.status} · Version {c.version}
+                    </p>
                   </div>
 
-                  {/* Delete Button */}
-                  <button
-                    onClick={() => handleDelete(c.code)}
-                    className="mt-4 bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600"
+                  <Link
+                    href={`/moderate/${c.code}`}
+                    className="mt-4 inline-flex justify-center bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-500"
                   >
-                    Delete
-                  </button>
+                    Manage campaign
+                  </Link>
                 </div>
               ))}
             </div>
