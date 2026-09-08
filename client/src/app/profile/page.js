@@ -26,7 +26,14 @@ export default function ProfilePage() {
       })
         .then(data => {
         console.log(data)
-        setUserData(data);
+        setUserData({
+          ...data,
+          firstName: data.firstName ?? '',
+          lastName: data.lastName ?? '',
+          username: data.username ?? '',
+          email: data.email ?? '',
+          profileIcon: data.profileIcon ?? '1',
+        });
         setIsLoading(false);
     });
   };
