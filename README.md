@@ -1,131 +1,109 @@
 # Bongii
 
-[Bongii](https://bongii.fayaz.one) is a free, customizable, real-time bingo game you can play with friends, family, or entire communities.  
+Bongii is moderator-led prediction bingo. Players build a board while a campaign is open, then watch every tile update from the moderator's decisions. When the campaign is finalized, Bongii scores every board and publishes a campaign leaderboard.
 
-Host a campaign, invite others with a code, and enjoy bingo like never before—complete with playful visuals and background music!  
+Try the deployed app at [bongii.fayaz.one](https://bongii.fayaz.one).
 
----
+> Status: early alpha. Campaign and board creation work, but authoritative real-time moderation, final scoring, leaderboards, and Firebase Authentication are planned work, not shipped features.
 
-# 🚧 Development Tracker
+## Current capabilities
 
-Here’s the current state of Bongii’s development.  
-✅ = Completed | ⬜ = In Progress / Not Yet Implemented  
+- Register and sign in with a local username and password.
+- Create a campaign with categories, items, a board size, and a start time.
+- Browse campaigns and create an anonymous board with a shareable code.
+- View campaign and board pages.
+- Persist moderator item outcomes through the API.
+- Edit a basic local profile and choose a preset avatar.
 
-## ✅ Completed
-- ✅ User accounts (registration & login with JWT local storage)  
-- ✅ Frontend deployed on **Vercel**  
-- ✅ Backend deployed on **Fly.io**  
-- ✅ Persistent volume mounts for database storage  
-- ✅ Create a campaign  
-- ✅ Share campaign code for others to join  
-- ✅ Create a board within a campaign  
-- ✅ Share board code  
-- ✅ Account profile settings  
-- ✅ Background music on the title screen  
+The current board page still lets each viewer mark tiles only in local React state. Those marks are lost on refresh and are not authoritative. The moderation page does not yet expose working start, outcome, or finalization controls.
 
-## ⬜ In Progress / To-Do
-- ⬜ Browse available campaigns  
-- ⬜ Google Sign-In integration  
-- ⬜ Live moderation & real-time board updates  
-- ⬜ Theme color customization  
-- ⬜ Background music customization (beyond title screen)  
+## Plans and specifications
 
----
+| Document | Purpose |
+| --- | --- |
+| [Product specification](docs/PRODUCT_SPEC.md) | Campaign states, moderation rules, colors, scoring, leaderboard behavior, and UX requirements |
+| [Implementation plan](docs/IMPLEMENTATION_PLAN.md) | Prioritized milestones, task checklists, acceptance criteria, and suggested follow-up features |
+| [Technical design](docs/TECHNICAL_DESIGN.md) | Database migration, REST and Socket.IO contracts, finalization transaction, Firebase Auth, testing, and rollout |
 
-## 📊 Overall Progress
-**70% Complete**  
+The next development milestone is Phase 0 in the implementation plan: stabilize the existing API, introduce repeatable SQLite migrations and tests, and close the current security gaps before adding real-time behavior.
+
+## Architecture
+
+| Area | Current technology |
+| --- | --- |
+| Web client | Next.js 15, React 19, Tailwind CSS 3, Framer Motion |
+| API | Node.js, Express 4 |
+| Data | SQLite on a Fly.io persistent volume |
+| Authentication | Temporary custom JWT flow backed by SQLite |
+| Real-time transport | Not implemented; Socket.IO is planned |
+| Hosting | Vercel for the client, Fly.io for the API |
+
+```text
+bongii/
+|- client/                  Next.js application
+|  `- src/app/
+|- server/                  Express API and SQLite access
+|- docs/                    Product and engineering plans
+`- README.md
 ```
-███████████░░░░░░░░
-```
-(9 of 14 features complete)  
 
----
-
-## ✨ Features
-- 🏆 **Custom Campaigns** – Create your own bingo campaign with unique categories and items.  
-- 🔗 **Easy Sharing** – Share a campaign code so others can join instantly.  
-- ⚡ **Real-Time Gameplay** – Powered by Socket.IO so everyone stays in sync.  
-- 🎶 **Background Music** – Add a fun, immersive game-night vibe.  
-- 👥 **Host & Player Roles** – Hosts moderate and call items, while players mark their boards.  
-- 🔐 **Google Sign-In** – Quickly create an account or log in with Google.  
-
----
-
-## 🌐 Play Online
-👉 Try it now for free at: **[bongii.fayaz.one](https://bongii.fayaz.one)**  
-
-1. **Sign in** (with Google or a Bongii account)  
-2. **Create a campaign** or **join an existing one** with a code  
-3. **Play bingo in real-time** with friends, family, or your community 🎉  
-
----
-
-## 🚀 Local Development
+## Local development
 
 ### Prerequisites
-- [Node.js](https://nodejs.org/) (v18+ recommended)  
-- [npm](https://www.npmjs.com/) or [yarn](https://yarnpkg.com/)  
 
-### Installation
+- Node.js 22, matching the server Docker image
+- npm
+
+Install each application separately:
+
 ```bash
-# Clone the repo
-git clone https://github.com/your-username/bongii.git
-cd bongii
-
-# Install dependencies
+cd server
 npm install
 
-# Copy environment variables
-cp .env.example .env
+cd ../client
+npm install
 ```
 
-Fill in your `.env` file with required values (Google OAuth keys, JWT secret, etc.).  
+Run the API on port `3000`:
 
-### Running Locally
 ```bash
+cd server
+JWT_SECRET=replace-with-a-development-secret npm start
+```
+
+Run the web client on port `3001`:
+
+```bash
+cd client
 npm run dev
 ```
 
-Visit `http://localhost:3000` in your browser.  
+Then open [http://localhost:3001](http://localhost:3001).
 
----
+Local setup is not fully portable yet: the API currently hard-codes `/data/test.db`, and the client currently defaults to the deployed API URL. Phase 0 replaces those values with `DATABASE_PATH` and `NEXT_PUBLIC_API_BASE_URL` environment variables. Until that work lands, take care not to point local development at production data.
 
-## 🛠 Tech Stack
-- **Frontend:** React / Next.js  
-- **Backend:** Node.js + Express  
-- **Real-time:** Socket.IO  
-- **Database:** SQLite (with Fly.io volumes)  
-- **Auth:** Google OAuth 2.0 + JWT  
-- **Hosting:** Fly.io  
+## Available commands
 
----
+| Directory | Command | Purpose |
+| --- | --- | --- |
+| `client` | `npm run dev` | Start Next.js on port 3001 |
+| `client` | `npm run build` | Create a production client build |
+| `client` | `npm run start` | Run the production client build |
+| `server` | `npm start` | Start Express on port 3000 |
 
-## 📦 Deployment
-Deploy to Fly.io with:
+There is currently no automated test command. Adding unit, API integration, and multi-client end-to-end tests is part of Phases 0 through 3.
+
+## Deployment
+
+The API deploys from `server/`:
+
 ```bash
+cd server
 fly deploy
 ```
 
-Make sure your Fly.io app has a volume mounted for persistent database storage.  
+The SQLite database lives on the Fly.io volume mounted at `/data`. Back up that volume before applying future schema migrations.
 
----
+## Security warning
 
-## 🤝 Contributing
-Contributions are welcome!  
-If you’d like to improve Bongii:
-1. Fork the repo  
-2. Create a feature branch (`git checkout -b feature-name`)  
-3. Commit changes (`git commit -m "Add feature"`)  
-4. Push to your fork (`git push origin feature-name`)  
-5. Open a Pull Request  
-
----
-
-## 📜 License
-MIT License © 2025 Fayaz  
-
----
-
-## 🌟 Acknowledgements
-- Inspired by classic **Bingo**, reimagined for the web  
-- Built with ❤️ for game nights, classrooms, and community fun  
+The current authentication implementation stores passwords without hashing, stores its JWT in browser local storage, and exposes a database cleanup route without authorization. Do not treat the current build as production-ready. The implementation plan makes removal of the cleanup route and migration away from local passwords blocking Phase 0 and authentication work.
