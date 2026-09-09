@@ -174,6 +174,19 @@ test('migrates a legacy schema once without losing campaign data', async () => {
       ],
     );
 
+    const migratedUser = await database.connection.get(`
+      SELECT firebaseUid, displayName, photoUrl, legacyUsername
+      FROM users
+      WHERE id = 1
+    `);
+    assert.deepEqual(migratedUser, {
+      firebaseUid: null,
+      displayName: 'Legacy Owner',
+      photoUrl: null,
+      legacyUsername: 'legacy',
+    });
+    assert.equal(campaign.createdBy, 1);
+
     await assert.rejects(
       database.connection.run("UPDATE campaigns SET status = 'invalid' WHERE code = 'OLDY'"),
       /CHECK constraint failed/,
@@ -195,6 +208,7 @@ test('migrates a legacy schema once without losing campaign data', async () => {
         '002_campaign_lifecycle.js',
         '003_item_outcomes.js',
         '004_result_snapshots.js',
+        '005_firebase_identity.js',
       ],
     );
     await database.close();
@@ -268,6 +282,7 @@ test('preserves pre-existing orphan rows while applying the lifecycle migration'
         '002_campaign_lifecycle.js',
         '003_item_outcomes.js',
         '004_result_snapshots.js',
+        '005_firebase_identity.js',
       ],
     );
 

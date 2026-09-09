@@ -4,10 +4,16 @@ const cors = require('cors');
 const express = require('express');
 const helmet = require('helmet');
 const { DomainError } = require('./db');
+const { createFirebaseTokenVerifier } = require('./firebaseAuth');
 const { createRealtimeServer } = require('./realtime');
 const { createRouter } = require('./routes');
 
-const createApp = ({ database, config, campaignEvents }) => {
+const createApp = ({
+  database,
+  config,
+  campaignEvents,
+  firebaseTokenVerifier = createFirebaseTokenVerifier(config),
+}) => {
   const app = express();
 
   app.disable('x-powered-by');
@@ -18,7 +24,12 @@ const createApp = ({ database, config, campaignEvents }) => {
     },
   }));
   app.use(express.json({ limit: '100kb' }));
-  app.use('/api', createRouter({ database, config, campaignEvents }));
+  app.use('/api', createRouter({
+    database,
+    config,
+    campaignEvents,
+    firebaseTokenVerifier,
+  }));
 
   app.use((req, res) => {
     res.status(404).json({ error: 'Not found' });
@@ -40,9 +51,9 @@ const createApp = ({ database, config, campaignEvents }) => {
   return app;
 };
 
-const createApiServer = ({ database, config, logger = console }) => {
+const createApiServer = ({ database, config, logger = console, firebaseTokenVerifier }) => {
   const campaignEvents = new EventEmitter();
-  const app = createApp({ database, config, campaignEvents });
+  const app = createApp({ database, config, campaignEvents, firebaseTokenVerifier });
   const server = http.createServer(app);
   const realtime = createRealtimeServer({
     server,

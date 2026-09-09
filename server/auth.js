@@ -6,23 +6,72 @@ const asyncRoute = (handler) => (req, res, next) => {
 
 const publicUser = (user) => ({
   id: user.id,
-  username: user.username,
+  username: user.legacyUsername || user.username,
+  displayName: user.displayName
+    || [user.firstName, user.lastName].filter(Boolean).join(' ')
+    || user.username,
   firstName: user.firstName,
   lastName: user.lastName,
   email: user.email,
   profileIcon: user.profileIcon,
+  photoUrl: user.photoUrl,
 });
 
-const createAuthMiddleware = (database, jwtSecret) => asyncRoute(async (req, res, next) => {
+const isFirebaseToken = (token) => {
+  const decoded = jwt.decode(token);
+  return typeof decoded?.iss === 'string'
+    && decoded.iss.startsWith('https://securetoken.google.com/');
+};
+
+const createAuthMiddleware = (
+  database,
+  { authMode = 'legacy', jwtSecret },
+  verifyFirebaseToken,
+) => asyncRoute(async (req, res, next) => {
   const authorization = req.get('Authorization');
-  if (!authorization?.startsWith('Bearer ')) {
+  const bearer = authorization?.match(/^Bearer\s+(.+)$/i);
+  if (!bearer) {
     res.status(401).json({ error: 'Authentication required' });
+    return;
+  }
+
+  const token = bearer[1];
+  const useFirebase = authMode === 'firebase'
+    || (authMode === 'hybrid' && isFirebaseToken(token));
+
+  if (useFirebase) {
+    let decoded;
+    try {
+      decoded = await verifyFirebaseToken(token);
+    } catch {
+      res.status(401).json({ error: 'Invalid, expired, or revoked token' });
+      return;
+    }
+
+    if (!decoded.uid || !decoded.email || decoded.email_verified !== true) {
+      res.status(403).json({ error: 'A verified email address is required' });
+      return;
+    }
+
+    req.user = await database.syncFirebaseUser({
+      firebaseUid: decoded.uid,
+      displayName: decoded.name,
+      email: decoded.email,
+      emailVerified: decoded.email_verified,
+      photoUrl: decoded.picture,
+    });
+    next();
+    return;
+  }
+
+  if (authMode === 'firebase') {
+    res.status(401).json({ error: 'Invalid or expired token' });
     return;
   }
 
   let decoded;
   try {
-    decoded = jwt.verify(authorization.slice(7), jwtSecret);
+    decoded = jwt.verify(token, jwtSecret);
   } catch {
     res.status(401).json({ error: 'Invalid or expired token' });
     return;

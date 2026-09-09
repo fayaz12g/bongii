@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Menu, X } from 'lucide-react';
-import { profileService } from '../services/profileService';
+import { useAuth } from './authContext';
 import { useBackground } from './context';
 
 const menuItemsBase = [
@@ -17,44 +17,28 @@ const menuItemsBase = [
 
 const Header = () => {
   const [isOpen, setIsOpen] = useState(false);
-  const [loggedIn, setLoggedIn] = useState(false);
   const pathname = usePathname();
   const router = useRouter(); 
   const { reduceMotion, setReduceMotion } = useBackground();
-
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (!token) return;
-
-    profileService.getUserData().then((response) => {
-      if (response.ok) {
-        setLoggedIn(true);
-      } else {
-        localStorage.removeItem('token');
-      }
-    }).catch(() => {
-      localStorage.removeItem('token');
-    });
-  }, []);
+  const { isAuthenticated, loading, signOut } = useAuth();
 
   const toggleMenu = () => setIsOpen(!isOpen);
 
-  const handleSignOut = () => {
-    localStorage.removeItem('token'); 
-    setLoggedIn(false);
+  const handleSignOut = async () => {
+    await signOut();
     router.push('/login');
   };
 
 // Build menu dynamically based on login state
 const menuItems = [
   ...menuItemsBase,
-  ...(loggedIn
+  ...(isAuthenticated
     ? [
         { name: "Create", path: "/create" },
         { name: "Moderate", path: "/moderate" },
         { name: "Sign Out", action: handleSignOut },
       ]
-    : [{ name: "Sign In", path: "/login" }]
+    : loading ? [] : [{ name: "Sign In", path: "/login" }]
   ),
 ];
 
@@ -70,7 +54,7 @@ const menuItems = [
             >
               <Link href="/">
                 <span className="block lg:inline">
-                  <Image src="/logo.png" alt="BONGII Logo" width={96} height={32} loading="eager" className="inline-block mr-2 h-8 w-24 object-contain" />
+                  <Image src="/logo.png" alt="BONGII Logo" width={96} height={34} loading="eager" className="mr-2 inline-block h-auto w-24 object-contain" />
                   {/* BONGII */}
                 </span>
               </Link>
@@ -87,7 +71,7 @@ const menuItems = [
                   <button
                     key={item.name}
                     onClick={item.action} 
-                    className="text-muted hover:text-white transition-colors"
+                    className="text-white hover:text-white transition-colors"
                   >
                     {item.name}
                   </button>
@@ -95,7 +79,7 @@ const menuItems = [
                   <Link
                     key={item.name}
                     href={item.path}
-                    className={`text-muted hover:text-white transition-colors ${pathname === item.path || pathname.startsWith(`${item.path}/`) ? 'text-white' : ''}`}
+                    className={`text-white hover:text-white transition-colors ${pathname === item.path || pathname.startsWith(`${item.path}/`) ? 'border-b-2 border-focus' : ''}`}
                   >
                     {item.name}
                   </Link>
@@ -106,7 +90,7 @@ const menuItems = [
                 role="switch"
                 aria-checked={reduceMotion}
                 onClick={() => setReduceMotion(!reduceMotion)}
-                className="flex items-center gap-2 text-sm font-medium text-muted hover:text-white"
+                className="flex items-center gap-2 text-sm font-medium text-white"
               >
                 <span>Reduce motion</span>
                 <span className={`relative h-6 w-11 rounded-full border transition-colors ${reduceMotion ? "border-focus bg-focus" : "border-line bg-panel-strong"}`} aria-hidden="true">

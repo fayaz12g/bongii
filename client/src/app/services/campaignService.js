@@ -1,4 +1,5 @@
 import { getServerPath } from '../utils/config';
+import { apiFetch, authenticatedApiFetch } from './apiClient';
 
 export const campaignService = {
 
@@ -96,7 +97,7 @@ export const campaignService = {
 
  // Create a new Bongii campaign
   async createCampaign(payload) {
-    const res = await fetch(`${getServerPath()}/campaigns`, {
+    const res = await authenticatedApiFetch('/campaigns', {
       method: "POST",
       body: JSON.stringify({
         title: payload.title,
@@ -107,8 +108,7 @@ export const campaignService = {
         categories: payload.categories,
       }),
       headers: {
-        "Content-type": "application/json; charset=UTF-8",
-        "Authorization": `Bearer ${localStorage.getItem("token")}`
+        "Content-type": "application/json; charset=UTF-8"
       }
     });
 
@@ -117,15 +117,14 @@ export const campaignService = {
 
   // Create a player board for a campaign
   async createPlayerBoard(payload) {
-  const res = await fetch(`${getServerPath()}/campaigns/${payload.campaignCode}/board`, {
+  const res = await apiFetch(`/campaigns/${payload.campaignCode}/board`, {
     method: "POST",
     body: JSON.stringify({
       playerName: payload.playerName,
       selectedTiles: payload.selectedTiles
     }),
     headers: {
-      "Content-type": "application/json; charset=UTF-8",
-      "Authorization": `Bearer ${localStorage.getItem("token")}`
+      "Content-type": "application/json; charset=UTF-8"
     }
   });
 
@@ -150,11 +149,10 @@ export const campaignService = {
   },
 
   async getModeratorCampaign(campaignCode) {
-    return fetch(`${getServerPath()}/moderate/campaigns/${campaignCode}`, {
+    return authenticatedApiFetch(`/moderate/campaigns/${campaignCode}`, {
       method: "GET",
       headers: {
-        "Content-type": "application/json; charset=UTF-8",
-        "Authorization": `Bearer ${localStorage.getItem("token")}`
+        "Content-type": "application/json; charset=UTF-8"
       }
     });
   },
@@ -170,11 +168,10 @@ export const campaignService = {
     const path = paths[action];
     if (!path) throw new Error(`Unknown campaign action: ${action}`);
 
-    const res = await fetch(`${getServerPath()}/campaigns/${campaignCode}/${path}`, {
+    const res = await authenticatedApiFetch(`/campaigns/${campaignCode}/${path}`, {
       method: "POST",
       headers: {
-        "Content-type": "application/json; charset=UTF-8",
-        "Authorization": `Bearer ${localStorage.getItem("token")}`
+        "Content-type": "application/json; charset=UTF-8"
       }
     });
 
@@ -182,22 +179,20 @@ export const campaignService = {
   },
 
   async updateItemOutcome(campaignCode, itemId, status) {
-    return fetch(`${getServerPath()}/campaigns/${campaignCode}/items/${itemId}/outcome`, {
+    return authenticatedApiFetch(`/campaigns/${campaignCode}/items/${itemId}/outcome`, {
       method: "POST",
       body: JSON.stringify({ status }),
       headers: {
-        "Content-type": "application/json; charset=UTF-8",
-        "Authorization": `Bearer ${localStorage.getItem("token")}`
+        "Content-type": "application/json; charset=UTF-8"
       }
     });
   },
 
   async finalizeCampaign(campaignCode) {
-    return fetch(`${getServerPath()}/campaigns/${campaignCode}/finalize`, {
+    return authenticatedApiFetch(`/campaigns/${campaignCode}/finalize`, {
       method: "POST",
       headers: {
-        "Content-type": "application/json; charset=UTF-8",
-        "Authorization": `Bearer ${localStorage.getItem("token")}`
+        "Content-type": "application/json; charset=UTF-8"
       }
     });
   },
@@ -213,11 +208,10 @@ export const campaignService = {
 
   // Delete campaign
   async deleteCampaign(code) {
-    const res = await fetch(`${getServerPath()}/campaigns/${code}`, {
+    const res = await authenticatedApiFetch(`/campaigns/${code}`, {
       method: "DELETE",
       headers: {
-        "Content-type": "application/json; charset=UTF-8",
-        "Authorization": `Bearer ${localStorage.getItem("token")}`
+        "Content-type": "application/json; charset=UTF-8"
       }
     });
 
@@ -226,11 +220,10 @@ export const campaignService = {
 
   // Get user's campaigns
   async getUserCampaigns() {
-    const res = await fetch(`${getServerPath()}/moderate/campaigns`, {
+    const res = await authenticatedApiFetch('/moderate/campaigns', {
       method: "GET",
       headers: {
-        "Content-type": "application/json; charset=UTF-8",
-        "Authorization": `Bearer ${localStorage.getItem("token")}`
+        "Content-type": "application/json; charset=UTF-8"
       }
     });
 

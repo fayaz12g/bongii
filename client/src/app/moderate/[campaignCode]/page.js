@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import {
   Ban,
   Check,
@@ -26,6 +26,7 @@ import Footer from "../../components/footer";
 import Background from "../../components/background";
 import { useBackground } from "../../components/context";
 import { useCampaignRealtime } from "../../hooks/useCampaignRealtime";
+import { useRequireAuth } from "../../hooks/useRequireAuth";
 
 const statusDetails = {
   draft: {
@@ -100,7 +101,7 @@ const connectionLabels = {
 };
 
 export default function ModerateCampaignPage() {
-  const router = useRouter();
+  const { isAuthenticated, loading: authLoading } = useRequireAuth();
   const { campaignCode } = useParams();
   const { setSelectedPreset } = useBackground();
   const [campaign, setCampaign] = useState(null);
@@ -157,10 +158,7 @@ export default function ModerateCampaignPage() {
   };
 
   useEffect(() => {
-    if (!localStorage.getItem("token")) {
-      router.push("/login");
-      return;
-    }
+    if (authLoading || !isAuthenticated) return undefined;
 
     let active = true;
     campaignService.getModeratorCampaign(campaignCode).then(async (response) => {
@@ -178,7 +176,7 @@ export default function ModerateCampaignPage() {
     return () => {
       active = false;
     };
-  }, [campaignCode, router, setSelectedPreset]);
+  }, [authLoading, campaignCode, isAuthenticated, setSelectedPreset]);
 
   const { connectionState, reconnect } = useCampaignRealtime({
     campaignCode: publicStatuses.has(campaign?.status) ? campaign.code : null,

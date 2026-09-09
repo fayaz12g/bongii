@@ -6,22 +6,30 @@ const { createApp } = require('../app');
 const { BongiiDatabase } = require('../db');
 
 const testConfig = {
+  authMode: 'legacy',
   jwtSecret: 'phase-zero-test-secret',
   allowedOrigins: ['http://localhost:3001'],
 };
 
-const createTestContext = async () => {
+const createTestContext = async ({
+  config = testConfig,
+  firebaseTokenVerifier,
+} = {}) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'bongii-test-'));
   const databasePath = path.join(directory, 'test.db');
   const database = await BongiiDatabase.open(databasePath);
   const context = {
-    api: request(createApp({ database, config: testConfig })),
+    api: request(createApp({ database, config, firebaseTokenVerifier })),
     database,
     databasePath,
     async restart() {
       await context.database.close();
       context.database = await BongiiDatabase.open(databasePath);
-      context.api = request(createApp({ database: context.database, config: testConfig }));
+      context.api = request(createApp({
+        database: context.database,
+        config,
+        firebaseTokenVerifier,
+      }));
     },
     async cleanup() {
       await context.database.close();

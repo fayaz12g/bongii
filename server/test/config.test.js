@@ -1,6 +1,11 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
-const { isExactHttpOrigin, parseOrigins } = require('../config');
+const {
+  isExactHttpOrigin,
+  parseAuthMode,
+  parseOrigins,
+  parsePrivateKey,
+} = require('../config');
 
 test('parses and validates exact browser origins', () => {
   assert.deepEqual(
@@ -12,4 +17,10 @@ test('parses and validates exact browser origins', () => {
   assert.equal(isExactHttpOrigin('*'), false);
   assert.equal(isExactHttpOrigin('https://bongii.example.vercel.app/path'), false);
   assert.equal(isExactHttpOrigin('bongii.example.vercel.app'), false);
+});
+
+test('normalizes authentication configuration values', () => {
+  assert.equal(parseAuthMode(undefined), 'legacy');
+  assert.equal(parseAuthMode(' HYBRID '), 'hybrid');
+  assert.equal(parsePrivateKey('first\\nsecond'), 'first\nsecond');
 });

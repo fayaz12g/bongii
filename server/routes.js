@@ -13,9 +13,9 @@ const matchesLegacyPassword = (candidate, storedPassword) => {
   return timingSafeEqual(candidateDigest, storedDigest);
 };
 
-const createRouter = ({ database, config, campaignEvents }) => {
+const createRouter = ({ database, config, campaignEvents, firebaseTokenVerifier }) => {
   const router = express.Router();
-  const requireAuth = createAuthMiddleware(database, config.jwtSecret);
+  const requireAuth = createAuthMiddleware(database, config, firebaseTokenVerifier);
   const lifecycle = new CampaignLifecycle(database);
   const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -29,6 +29,10 @@ const createRouter = ({ database, config, campaignEvents }) => {
   });
 
   router.post('/users', authLimiter, validateBody(schemas.register), asyncRoute(async (req, res) => {
+    if (config.authMode === 'firebase') {
+      res.status(404).json({ error: 'Not found' });
+      return;
+    }
     const existingUser = await database.getUserByUsername(req.validatedBody.username);
     if (existingUser) {
       res.status(409).json({ error: 'Username already exists' });
@@ -41,6 +45,10 @@ const createRouter = ({ database, config, campaignEvents }) => {
   }));
 
   router.post('/login', authLimiter, validateBody(schemas.login), asyncRoute(async (req, res) => {
+    if (config.authMode === 'firebase') {
+      res.status(404).json({ error: 'Not found' });
+      return;
+    }
     const user = await database.getUserByUsername(req.validatedBody.username);
     if (!user?.password) {
       res.status(401).json({ error: 'Invalid login information' });

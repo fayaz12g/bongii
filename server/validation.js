@@ -34,12 +34,18 @@ const schemas = {
     username: requiredText(50),
     password: z.string().min(1).max(200),
   }),
-  profile: z.object({
-    firstName: requiredText(80),
-    lastName: requiredText(80),
-    email: optionalEmail,
-    profileIcon: z.string().trim().max(100).optional(),
-  }),
+  profile: z.union([
+    z.object({
+      displayName: requiredText(160),
+      profileIcon: z.string().trim().max(100).optional(),
+    }),
+    z.object({
+      firstName: requiredText(80),
+      lastName: requiredText(80),
+      email: optionalEmail,
+      profileIcon: z.string().trim().max(100).optional(),
+    }),
+  ]),
   campaign: z.object({
     title: requiredText(120),
     description: z.string().trim().max(2000).optional(),

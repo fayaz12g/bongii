@@ -1,5 +1,6 @@
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test } from "@playwright/test";
+import { clearAuthUsers, signInTestUser } from "./firebaseAuthFixture.mjs";
 
 const preset = {
   id: 1,
@@ -124,12 +125,19 @@ const json = (route, body, status = 200) => route.fulfill({
   body: JSON.stringify(body),
 });
 
-test.beforeEach(async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem("token", "accessibility-fixture"));
+test.beforeEach(async ({ page, request }) => {
+  await clearAuthUsers(request);
   await page.route("**/api/**", (route) => {
     const url = new URL(route.request().url());
     if (url.pathname === "/api/users/current") {
-      return json(route, { id: 1, username: "moderator", firstName: "Test", lastName: "Owner" });
+      return json(route, {
+        id: 1,
+        username: "moderator",
+        displayName: "Test Moderator",
+        email: "moderator@example.com",
+        profileIcon: "1",
+        photoUrl: null,
+      });
     }
     if (url.pathname === "/api/campaigns") {
       const group = url.searchParams.get("group");
@@ -146,19 +154,20 @@ test.beforeEach(async ({ page }) => {
 
 const cases = [
   { name: "browse", path: "/browse?group=open", heading: "Browse campaigns" },
-  { name: "moderation", path: "/moderate/LIVE", heading: moderatorCampaign.title },
+  { name: "moderation", path: "/moderate/LIVE", heading: moderatorCampaign.title, requiresAuth: true },
   { name: "board", path: "/boards/PLAY", heading: completedCampaign.title },
   { name: "leaderboard", path: "/leaderboards/DONE", heading: completedCampaign.title },
   { name: "public board builder", path: "/OPEN", heading: openCampaign.title },
-  { name: "registration", path: "/register", heading: "Register" },
-  { name: "profile", path: "/profile", heading: "Your Profile" },
-  { name: "campaign creation", path: "/create", heading: "Create Campaign" },
+  { name: "registration", path: "/register", heading: "Create account" },
+  { name: "profile", path: "/profile", heading: "Your Profile", requiresAuth: true },
+  { name: "campaign creation", path: "/create", heading: "Create Campaign", requiresAuth: true },
   { name: "campaign code entry", path: "/play", heading: "Enter a campaign code" },
 ];
 
 for (const screen of cases) {
-  test(`${screen.name} has no WCAG 2.2 AA Axe violations`, async ({ page }) => {
-    await page.goto(screen.path);
+  test(`${screen.name} has no WCAG 2.2 AA Axe violations`, async ({ page, request }) => {
+    if (screen.requiresAuth) await signInTestUser({ page, request, returnTo: screen.path });
+    else await page.goto(screen.path);
     await expect(page.getByRole("heading", { level: 1, name: screen.heading })).toBeVisible();
     const results = await new AxeBuilder({ page })
       .withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"])
@@ -199,7 +208,7 @@ test("reduced motion persists and suppresses home particles", async ({ page }) =
   await expect(page.getByRole("switch", { name: "Reduce motion" })).not.toBeChecked();
 });
 
-test("critical work screens reflow from 320px through wide desktop", async ({ page }) => {
+test("critical work screens reflow from 320px through wide desktop", async ({ page, request }) => {
   const screens = [
     { path: "/browse?group=open", heading: "Browse campaigns" },
     { path: "/OPEN", heading: openCampaign.title },
@@ -212,6 +221,8 @@ test("critical work screens reflow from 320px through wide desktop", async ({ pa
     { width: 640, height: 900 },
     { width: 1920, height: 1080 },
   ];
+
+  await signInTestUser({ page, request });
 
   for (const viewport of viewports) {
     await page.setViewportSize(viewport);

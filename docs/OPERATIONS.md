@@ -10,7 +10,12 @@ This runbook covers the Phase 0 configuration, SQLite migrations, backup checks,
 | --- | --- | --- | --- |
 | `PORT` | No | `3000` | HTTP listen port |
 | `DATABASE_PATH` | No | `./data/bongii.db` | SQLite file; Fly explicitly retains `/data/test.db` for existing production data |
-| `JWT_SECRET` | Yes | Generated secret | Signs temporary local-auth tokens |
+| `AUTH_MODE` | No | `legacy`, `hybrid`, or `firebase` | Enables legacy JWTs, both token types, or Firebase only |
+| `JWT_SECRET` | Conditional | Generated secret | Required in `legacy` and `hybrid` modes |
+| `FIREBASE_PROJECT_ID` | Conditional | `bongii-production` | Required in `hybrid` and `firebase` modes |
+| `FIREBASE_CLIENT_EMAIL` | Conditional | Service-account email | Set together with the private key outside the emulator |
+| `FIREBASE_PRIVATE_KEY` | Conditional | Service-account private key | Fly secret; escaped `\n` sequences are supported |
+| `FIREBASE_AUTH_EMULATOR_HOST` | No | `127.0.0.1:9099` | Uses the local Auth emulator; never set in production |
 | `CLIENT_ORIGINS` | No | `http://localhost:3001,https://bongii.fayaz.one,https://bongii-git-feature-account.vercel.app` | Exact comma-separated browser origins allowed by REST and Socket.IO CORS |
 
 Set the production JWT secret with Fly secrets, never in `fly.toml`:
@@ -28,8 +33,15 @@ Changing this value signs every user out. The Firebase migration will eventually
 | Variable | Required | Example | Purpose |
 | --- | --- | --- | --- |
 | `NEXT_PUBLIC_API_BASE_URL` | Yes in deployment | `https://bongii.fly.dev` | API origin without `/api` |
+| `NEXT_PUBLIC_FIREBASE_API_KEY` | Yes for Firebase | Firebase Web app value | Public Firebase client identifier |
+| `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | Yes for Firebase | `project.firebaseapp.com` | Firebase Auth domain |
+| `NEXT_PUBLIC_FIREBASE_PROJECT_ID` | Yes for Firebase | `bongii-production` | Must match the API project ID |
+| `NEXT_PUBLIC_FIREBASE_APP_ID` | Yes for Firebase | Firebase Web app value | Public Firebase app identifier |
+| `NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST` | No | `127.0.0.1:9099` | Local development only |
 
 The source default is `http://localhost:3000`, so an unconfigured local build cannot silently write to production. Set the production value in Vercel for Production and Preview environments as appropriate.
+
+See [Firebase Authentication setup and rollout](FIREBASE_AUTH.md) for provider, authorized-domain, service-account, account-linking, and staged-release steps.
 
 ## Local setup
 
@@ -39,6 +51,7 @@ cp client/.env.example client/.env.local
 npm --prefix server ci
 npm --prefix client ci
 npm --prefix server run db:migrate
+npm --prefix server run auth:audit
 ```
 
 The API also runs migrations before it starts listening.

@@ -12,6 +12,24 @@ const BROWSE_GROUP_STATUSES = Object.freeze({
 
 const escapeLike = (value) => value.replace(/[\\%_]/g, '\\$&');
 
+const cleanText = (value, maximum) => {
+  if (typeof value !== 'string') return null;
+  const cleaned = value.trim();
+  return cleaned ? cleaned.slice(0, maximum) : null;
+};
+
+const safeGooglePhotoUrl = (value) => {
+  try {
+    const parsed = new URL(value);
+    if (parsed.protocol !== 'https:'
+      || (parsed.hostname !== 'googleusercontent.com'
+        && !parsed.hostname.endsWith('.googleusercontent.com'))) return null;
+    return parsed.toString().slice(0, 2048);
+  } catch {
+    return null;
+  }
+};
+
 class DomainError extends Error {
   constructor(message, statusCode = 400) {
     super(message);
@@ -81,6 +99,82 @@ class BongiiDatabase {
     return this.connection.get('SELECT * FROM users WHERE username = ?', [username]);
   }
 
+  getUserByFirebaseUid(firebaseUid) {
+    return this.connection.get('SELECT * FROM users WHERE firebaseUid = ?', [firebaseUid]);
+  }
+
+  async syncFirebaseUser(identity) {
+    const firebaseUid = cleanText(identity.firebaseUid, 128);
+    const email = cleanText(identity.email, 320)?.toLowerCase();
+    const displayName = cleanText(identity.displayName, 160)
+      || email?.split('@')[0]
+      || 'Bongii user';
+    const photoUrl = safeGooglePhotoUrl(identity.photoUrl);
+    if (!firebaseUid || !email || identity.emailVerified !== true) {
+      throw new DomainError('A verified Firebase identity is required', 403);
+    }
+
+    return this.transaction(async (connection) => {
+      let user = await connection.get(
+        'SELECT * FROM users WHERE firebaseUid = ?',
+        [firebaseUid],
+      );
+      if (user) {
+        const conflictingEmail = await connection.get(
+          `SELECT id FROM users
+           WHERE id != ? AND LOWER(TRIM(email)) = ?`,
+          [user.id, email],
+        );
+        if (conflictingEmail) {
+          throw new DomainError('This email needs manual account recovery', 409);
+        }
+        await connection.run(
+          `UPDATE users
+           SET displayName = ?, email = ?, photoUrl = ?
+           WHERE id = ?`,
+          [displayName, email, photoUrl, user.id],
+        );
+        return connection.get('SELECT * FROM users WHERE id = ?', [user.id]);
+      }
+
+      const emailMatches = await connection.all(
+        `SELECT * FROM users
+         WHERE LOWER(TRIM(email)) = ?
+         ORDER BY id`,
+        [email],
+      );
+      if (emailMatches.length > 1) {
+        throw new DomainError('This email needs manual account recovery', 409);
+      }
+
+      if (emailMatches.length === 1) {
+        [user] = emailMatches;
+        if (user.firebaseUid) {
+          throw new DomainError('This email is already linked to another account', 409);
+        }
+        await connection.run(
+          `UPDATE users
+           SET firebaseUid = ?, displayName = ?, email = ?, photoUrl = ?,
+               legacyUsername = COALESCE(legacyUsername, username), password = NULL
+           WHERE id = ?`,
+          [firebaseUid, displayName, email, photoUrl, user.id],
+        );
+        return connection.get('SELECT * FROM users WHERE id = ?', [user.id]);
+      }
+
+      const nameParts = displayName.split(/\s+/);
+      const firstName = nameParts.shift();
+      const lastName = nameParts.join(' ') || null;
+      const result = await connection.run(
+        `INSERT INTO users
+          (firebaseUid, displayName, email, photoUrl, firstName, lastName, profileIcon)
+         VALUES (?, ?, ?, ?, ?, ?, '1')`,
+        [firebaseUid, displayName, email, photoUrl, firstName, lastName],
+      );
+      return connection.get('SELECT * FROM users WHERE id = ?', [result.lastID]);
+    });
+  }
+
   getAllUsers() {
     return this.connection.all(
       'SELECT id, username, firstName, lastName, email, profileIcon FROM users ORDER BY username',
@@ -88,6 +182,20 @@ class BongiiDatabase {
   }
 
   async updateUserProfile(id, updates) {
+    if (updates.displayName !== undefined) {
+      const displayName = cleanText(updates.displayName, 160);
+      const nameParts = displayName.split(/\s+/);
+      const firstName = nameParts.shift();
+      const lastName = nameParts.join(' ') || null;
+      await this.connection.run(
+        `UPDATE users
+         SET displayName = ?, firstName = ?, lastName = ?, profileIcon = ?
+         WHERE id = ?`,
+        [displayName, firstName, lastName, updates.profileIcon || '1', id],
+      );
+      return this.getUser(id);
+    }
+
     await this.connection.run(
       `UPDATE users
        SET firstName = ?, lastName = ?, email = ?, profileIcon = ?

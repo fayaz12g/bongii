@@ -7,25 +7,17 @@ import Background from "./components/background";
 import Footer from "./components/footer";
 import { motion, AnimatePresence } from "framer-motion";
 import { Upload, Play, Loader2 } from "lucide-react";
-import { profileService } from "./services/profileService";
+import { useAuth } from "./components/authContext";
+import { loginHref } from "./utils/authRedirect.mjs";
 
 export default function Home() {
   const router = useRouter();
   const [isLoading, setIsLoading] = useState(false);
+  const { isAuthenticated, loading: authLoading } = useAuth();
 
-  const handleCreateSubmit = async () => {
+  const handleCreateSubmit = () => {
     setIsLoading(true);
-    try {
-      const response = await profileService.getUserData();
-      if (!response.ok) {
-        router.push("/login");
-      } else {
-        router.push("/create");
-      }
-    } catch (err) {
-      console.error(err);
-      router.push("/login");
-    }
+    router.push(isAuthenticated ? "/create" : loginHref("/create"));
   };
 
   return (
@@ -61,7 +53,7 @@ export default function Home() {
                 src="/logo.png"
                 alt="App Logo"
                 width={320}
-                height={128}
+                height={113}
                 priority
                 className="h-auto w-full max-w-80 object-contain"
               />
@@ -84,6 +76,7 @@ export default function Home() {
               whileTap={{ scale: 0.97 }}
               className="w-full bg-gradient-to-r from-green-400 to-green-500 text-white p-5 rounded-2xl shadow-lg flex items-center justify-center space-x-3 border-4 border-white/30 hover:border-white/50 transition-colors"
               onClick={handleCreateSubmit}
+              disabled={authLoading}
             >
               <Upload className="w-6 h-6" />
               <span className="text-lg font-semibold">Create</span>

@@ -4,11 +4,11 @@ Bongii is moderator-led prediction bingo. Players build a board while a campaign
 
 Try the deployed app at [bongii.fayaz.one](https://bongii.fayaz.one).
 
-> Status: early alpha. Phases 0 through 2 are complete locally. Final scoring, leaderboards, visual cleanup, and Firebase Authentication remain planned work.
+> Status: early alpha. Phases 0 through 4 are complete locally. Phase 5 Firebase Authentication is implemented locally and awaits Firebase project provisioning and a staged production rollout. Production currently runs Phase 1 server code.
 
 ## Current capabilities
 
-- Register and sign in with a bcrypt-hashed local username and password.
+- Register and sign in with Firebase email/password or Google; the API retains a temporary hybrid migration mode for legacy accounts.
 - Create a campaign with categories, items, a board size, and a start time.
 - Publish, lock, reopen, moderate, or cancel a campaign through owner-only lifecycle controls.
 - Browse campaigns and create an anonymous board with a shareable code.
@@ -25,8 +25,9 @@ Try the deployed app at [bongii.fayaz.one](https://bongii.fayaz.one).
 | [Implementation plan](docs/IMPLEMENTATION_PLAN.md) | Prioritized milestones, task checklists, acceptance criteria, and suggested follow-up features |
 | [Technical design](docs/TECHNICAL_DESIGN.md) | Database migration, REST and Socket.IO contracts, finalization transaction, Firebase Auth, testing, and rollout |
 | [Operations runbook](docs/OPERATIONS.md) | Environment variables, migrations, production backup checks, release verification, and rollback |
+| [Firebase Authentication setup](docs/FIREBASE_AUTH.md) | Firebase console setup, account migration, secrets, and staged rollout |
 
-The next development milestone is Phase 3 in the implementation plan: add deterministic scoring, atomic finalization, and campaign leaderboards.
+The next operational milestone is provisioning the development and production Firebase projects, remediating legacy emails, and deploying Phase 5 behind hybrid authentication.
 
 ## Architecture
 
@@ -35,7 +36,7 @@ The next development milestone is Phase 3 in the implementation plan: add determ
 | Web client | Next.js 16, React 19, Tailwind CSS 3, Framer Motion |
 | API | Node.js, Express 5 |
 | Data | SQLite on a Fly.io persistent volume |
-| Authentication | Temporary custom JWT flow backed by SQLite |
+| Authentication | Firebase Authentication with temporary server-side legacy JWT compatibility |
 | Real-time transport | Socket.IO campaign rooms with REST snapshot recovery |
 | Hosting | Vercel for the client, Fly.io for the API |
 
@@ -94,6 +95,7 @@ Local development defaults to `server/data/bongii.db` and `http://localhost:3000
 | `server` | `npm start` | Start Express on port 3000 |
 | `server` | `npm test` | Run API, authorization, migration, CORS, and Socket.IO tests |
 | `server` | `npm run db:migrate` | Apply pending SQLite migrations without starting HTTP |
+| `server` | `npm run auth:audit` | Print aggregate Firebase migration readiness counts |
 
 GitHub Actions runs server tests, client lint and build, and production dependency audits on pushes to `main` and pull requests.
 
@@ -110,4 +112,4 @@ The SQLite database lives at the historical `/data/test.db` path on the Fly.io v
 
 ## Security warning
 
-New and successfully migrated legacy passwords are bcrypt-hashed, user responses never include password fields, and the old database cleanup endpoint has been removed. Authentication is still transitional: JWTs remain in browser local storage and there is no email verification or password recovery. Phase 5 replaces this flow with Firebase Authentication.
+New client sessions use Firebase-managed credentials and short-lived ID tokens; Bongii does not store those tokens itself. Hybrid server mode exists only for the migration window. Service-account credentials belong in Fly secrets and must never use a `NEXT_PUBLIC_` variable or enter the repository.

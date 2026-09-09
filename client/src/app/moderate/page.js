@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from 'next/navigation';
 import Link from "next/link";
 import { ArrowRight, CalendarDays, Grid3X3, Plus, RefreshCw, Users } from "lucide-react";
 import { campaignService } from "../services/campaignService";
 import Footer from "../components/footer";
 import Background from "../components/background";
 import Header from "../components/header";
+import { useRequireAuth } from "../hooks/useRequireAuth";
 
 const statuses = {
   draft: { label: "Draft", className: "border-slate-400 text-slate-100" },
@@ -19,16 +19,12 @@ const statuses = {
 };
 
 export default function Moderate() {
-  const router = useRouter();
+  const { isAuthenticated, loading: authLoading } = useRequireAuth();
   const [reloadKey, setReloadKey] = useState(0);
   const [request, setRequest] = useState({ status: "loading", campaigns: [], error: "" });
 
   useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      router.push("/login");
-      return;
-    }
+    if (authLoading || !isAuthenticated) return undefined;
 
     let active = true;
     campaignService.getUserCampaigns().then(async (response) => {
@@ -44,7 +40,7 @@ export default function Moderate() {
     return () => {
       active = false;
     };
-  }, [reloadKey, router]);
+  }, [authLoading, isAuthenticated, reloadKey]);
 
   return (
     <div className="app-page">

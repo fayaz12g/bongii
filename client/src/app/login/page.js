@@ -1,40 +1,78 @@
 "use client";
+
+import Link from "next/link";
+import { Loader2, LogIn } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
-import { userService } from "../services/userService";
+import { useEffect, useState } from "react";
 import Background from "../components/background";
+import { useAuth } from "../components/authContext";
 import Footer from "../components/footer";
+import { safeReturnTo } from "../utils/authRedirect.mjs";
+
+const readReturnTo = () => safeReturnTo(
+  new URLSearchParams(window.location.search).get("returnTo"),
+);
+
+const loginErrorMessage = (error) => {
+  if (error.code === "auth/popup-closed-by-user") return "";
+  if (error.message?.includes("manual account recovery")) return error.message;
+  if (error.message?.startsWith("Firebase is not configured")) return error.message;
+  return "Sign in failed. Check your details and try again.";
+};
 
 export default function LoginPage() {
   const router = useRouter();
+  const {
+    authError,
+    firebaseUser,
+    isAuthenticated,
+    loading: authLoading,
+    signInWithEmail,
+    signInWithGoogle,
+  } = useAuth();
   const [error, setError] = useState("");
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const isFormValid = Boolean(username && password);
+  const [operation, setOperation] = useState("");
+  const isFormValid = Boolean(email && password);
 
   useEffect(() => {
-    // Check if user is logged in
-    const token = localStorage.getItem("token");
-    if (token) {
-      router.push("/home");
+    if (authLoading) return;
+    if (isAuthenticated) router.replace(readReturnTo());
+    else if (firebaseUser && !firebaseUser.emailVerified) {
+      router.replace(`/verify-email?returnTo=${encodeURIComponent(readReturnTo())}`);
     }
-  }, [router]);
+  }, [authLoading, firebaseUser, isAuthenticated, router]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
     if (!isFormValid) return;
     setError("");
+    setOperation("email");
     try {
-      const response = await userService.loginUser(username, password);
-      if (!response.ok) {
-        setError("The username or password is incorrect.");
+      const user = await signInWithEmail(email, password);
+      if (!user.emailVerified) {
+        router.push(`/verify-email?returnTo=${encodeURIComponent(readReturnTo())}`);
         return;
       }
-      const data = await response.json();
-      localStorage.setItem("token", data.token);
-      router.push("/home");
-    } catch {
-      setError("Sign in is unavailable. Please try again.");
+      router.replace(readReturnTo());
+    } catch (requestError) {
+      setError(loginErrorMessage(requestError));
+    } finally {
+      setOperation("");
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setError("");
+    setOperation("google");
+    try {
+      await signInWithGoogle();
+      router.replace(readReturnTo());
+    } catch (requestError) {
+      setError(loginErrorMessage(requestError));
+    } finally {
+      setOperation("");
     }
   };
 
@@ -44,26 +82,42 @@ export default function LoginPage() {
 
       <main className="z-10 flex flex-1 items-center justify-center px-4 py-16">
       <div className="app-panel w-full max-w-md p-6 sm:p-8">
-        <h1 className="text-4xl font-bold text-white text-center mb-8">Login</h1>
+        <h1 className="mb-2 text-center text-4xl font-bold text-white">Sign in</h1>
+        <p className="mb-8 text-center text-muted">Manage campaigns with your verified account.</p>
+
+        <button
+          type="button"
+          onClick={handleGoogleSignIn}
+          disabled={Boolean(operation) || Boolean(authError)}
+          className="ui-button-secondary w-full"
+        >
+          {operation === "google" ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
+          Continue with Google
+        </button>
+
+        <div className="my-6 flex items-center gap-3 text-xs font-semibold uppercase text-muted">
+          <span className="h-px flex-1 bg-line" />
+          <span>or email</span>
+          <span className="h-px flex-1 bg-line" />
+        </div>
 
         <form className="space-y-6" onSubmit={handleSubmit}>
-          {/* Username */}
           <div>
-            <label htmlFor="login-username" className="block text-sm font-medium text-white mb-1">
-              Username <span className="text-red-500">*</span>
+            <label htmlFor="login-email" className="block text-sm font-medium text-white mb-1">
+              Email <span className="text-red-500">*</span>
             </label>
             <input
-              id="login-username"
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              autoComplete="username"
+              id="login-email"
+              type="email"
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+              autoComplete="email"
               className="ui-field"
-              placeholder="Enter username"
+              placeholder="you@example.com"
+              required
             />
           </div>
 
-          {/* Password */}
           <div>
             <label htmlFor="login-password" className="block text-sm font-medium text-white mb-1">
               Password <span className="text-red-500">*</span>
@@ -72,49 +126,51 @@ export default function LoginPage() {
               id="login-password"
               type="password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(event) => setPassword(event.target.value)}
               autoComplete="current-password"
               className="ui-field"
               placeholder="Enter password"
+              required
             />
+            <div className="mt-2 text-right">
+              <button
+                type="button"
+                onClick={() => router.push(`/forgot-password?returnTo=${encodeURIComponent(readReturnTo())}`)}
+                className="text-sm font-medium text-blue-300 underline hover:text-blue-200"
+              >
+                Forgot password?
+              </button>
+            </div>
           </div>
-
-          {/* Buttons */}
-          <div className="flex flex-col md:flex-row justify-between items-center gap-4 mt-4">
-            <button
-              type="button"
-              onClick={() => router.push("/")}
-              className="ui-button-danger w-full md:w-auto"
-            >
-              Cancel
-            </button>
 
             <button
               type="submit"
-              disabled={!isFormValid}
-              className="ui-button-primary w-full md:w-auto"
+              disabled={!isFormValid || Boolean(operation) || Boolean(authError)}
+              className="ui-button-primary w-full"
             >
-              Login
+              {operation === "email" && <Loader2 className="h-4 w-4 animate-spin" />}
+              Sign in
             </button>
-          </div>
 
-          {error && (
-            <p role="alert" className="ui-toast border-rose-400 text-rose-100">{error}</p>
+          {(error || authError) && (
+            <p role="alert" className="ui-toast border-rose-400 text-rose-100">{error || authError}</p>
           )}
         </form>
 
-        {/* Register Area */}
         <div className="mt-6 text-center">
           <p className="text-white">
             Don&apos;t have an account?{" "}
             <button
               type="button"
-              onClick={() => router.push("/register")}
+              onClick={() => router.push(`/register?returnTo=${encodeURIComponent(readReturnTo())}`)}
               className="underline text-blue-400 hover:text-blue-300 font-medium"
             >
-              Register
+              Create one
             </button>
           </p>
+          <Link href="/" className="mt-4 inline-block text-sm text-muted underline hover:text-white">
+            Back to Bongii
+          </Link>
         </div>
       </div>
       </main>

@@ -7,6 +7,7 @@ import { useBackground } from "../components/context";
 import Footer from "../components/footer";
 import { campaignService } from "../services/campaignService";
 import Header from "../components/header";
+import { useRequireAuth } from "../hooks/useRequireAuth";
 import { Plus, X, Trash2, Palette, Grid3X3, Square, SquareStack, Check, Sparkles, Wand2, ChevronLeft, ChevronRight, Download, Upload } from "lucide-react";
 import { downloadExampleCampaign, parseCampaignImport } from "./campaignImport.mjs";
 
@@ -29,6 +30,7 @@ const boardSizes = [
 
 export default function CreateCampaign() {
   const router = useRouter();
+  useRequireAuth();
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(1); // 1: Basic Info, 2: Categories, 3: Review
   
@@ -116,14 +118,6 @@ useEffect(() => {
     setSelectedPreset(customThemeObject);
   }
 }, [customTheme, themeMode, setSelectedPreset]);
-
-  useEffect(() => {
-    // Check if user is logged in
-    const token = localStorage.getItem("token");
-    if (!token) {
-      router.push("/login");
-    }
-  }, [router]);
 
   const addCategory = () => {
     if (newCategoryName.trim() && newCategoryItems.some(item => item.trim())) {

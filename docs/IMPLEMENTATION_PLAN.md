@@ -232,40 +232,42 @@ Priority: `P1` for password security, `P2` for uploaded avatars
 
 Goal: remove password ownership from Bongii while retaining SQLite for game and profile data.
 
+Status: implemented and tested locally on 2026-09-09. Firebase project provisioning, production account remediation, and the backup-first rollout remain operational work.
+
 ### Authentication
 
 - [ ] Create separate Firebase projects for development and production.
 - [ ] Enable email/password and Google providers; do not enable phone authentication.
-- [ ] Add Firebase client initialization and an application-wide auth provider.
-- [ ] Add email registration, sign-in, sign-out, verification, and forgot-password screens.
-- [ ] Send Firebase ID tokens to Express and verify them with the Admin SDK.
-- [ ] Key local user records by unique `firebaseUid`, not username.
-- [ ] Replace scattered local-storage token reads with one authenticated API client.
-- [ ] Preserve the return URL across sign-in.
+- [x] Add Firebase client initialization and an application-wide auth provider.
+- [x] Add email registration, sign-in, sign-out, verification, and forgot-password screens.
+- [x] Send Firebase ID tokens to Express and verify them with the Admin SDK.
+- [x] Key local user records by unique `firebaseUid`, not username.
+- [x] Replace scattered local-storage token reads with one authenticated API client.
+- [x] Preserve the return URL across sign-in.
 - [ ] Rate-limit sensitive endpoints and configure authorized domains.
 
 ### Existing-account migration
 
-- [ ] Audit current users for missing or duplicate email addresses before choosing a migration path.
+- [x] Audit current users for missing or duplicate email addresses before choosing a migration path.
 - [ ] Back up the database and notify affected users.
 - [ ] Link migratable accounts without changing campaign ownership.
 - [ ] Provide manual recovery for users without a usable email address.
-- [ ] Clear legacy password values immediately after successful migration.
+- [x] Clear legacy password values immediately after successful migration.
 - [ ] Remove password login and the password column after a measured migration window.
 
 ### Profiles and avatars
 
-- [ ] Sync display name and Google `photoURL` into the local profile record.
-- [ ] Keep preset avatars as the no-billing fallback.
-- [ ] Validate image host, size, and fallback behavior in Next.js.
-- [ ] Defer direct image uploads until a Blaze billing account, budget alert, file validation, and deletion policy are approved.
+- [x] Sync display name and Google `photoURL` into the local profile record.
+- [x] Keep preset avatars as the no-billing fallback.
+- [x] Validate image host, size, and fallback behavior in Next.js.
+- [x] Defer direct image uploads until a Blaze billing account, budget alert, file validation, and deletion policy are approved.
 
 ### Acceptance checks
 
 - [ ] Email and Google users can reach the same local profile after repeated sign-ins.
 - [ ] Password reset and email verification work on the production domain.
 - [ ] Revoked, expired, malformed, and wrong-project tokens return `401`.
-- [ ] Migrated moderators still own their campaigns.
+- [x] Migrated moderators still own their campaigns.
 - [ ] No local password value remains after migration completes.
 
 ## Phase 6: Release quality and operations

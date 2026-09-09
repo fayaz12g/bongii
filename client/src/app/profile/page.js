@@ -1,41 +1,44 @@
 "use client";
 import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { profileService } from '../services/profileService';
 import Header from '../components/header';
 import dynamic from "next/dynamic";
+import { useRequireAuth } from '../hooks/useRequireAuth';
 
 const Background = dynamic(() => import("../components/background"), { ssr: false });
 const Footer = dynamic(() => import("../components/footer"), { ssr: false });
 
 export default function ProfilePage() {
-  const router = useRouter(); 
+  const {
+    firebaseUser,
+    isAuthenticated,
+    loading: authLoading,
+    syncProfile,
+    updateDisplayName,
+  } = useRequireAuth();
   const [userData, setUserData] = useState({
-    firstName: '',
-    lastName: '',
+    displayName: '',
     username: '',
     email: '',
-    profileIcon: '1'
+    profileIcon: '1',
+    photoUrl: null,
   });
   const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState('');
 
   useEffect(() => {
+    if (authLoading || !isAuthenticated) return undefined;
     let active = true;
     const loadUserData = async () => {
       try {
         const response = await profileService.getUserData();
-        if (!response.ok) {
-          router.push('/login');
-          return;
-        }
+        if (!response.ok) throw new Error('Unable to load profile');
         const data = await response.json();
         if (!active) return;
         setUserData({
           ...data,
-          firstName: data.firstName ?? '',
-          lastName: data.lastName ?? '',
+          displayName: data.displayName ?? '',
           username: data.username ?? '',
           email: data.email ?? '',
           profileIcon: data.profileIcon ?? '1',
@@ -48,7 +51,7 @@ export default function ProfilePage() {
     };
     loadUserData();
     return () => { active = false; };
-  }, [router]);
+  }, [authLoading, isAuthenticated]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -60,15 +63,19 @@ export default function ProfilePage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    setMessage('');
     try {
-      await profileService.updateUserData(userData); 
+      await updateDisplayName(userData.displayName.trim());
+      const response = await profileService.updateUserData(userData);
+      if (!response.ok) throw new Error('Unable to update profile');
+      await syncProfile(firebaseUser);
       setMessage('Profile updated successfully!');
-    } catch (error) {
+    } catch {
       setMessage('Error updating profile');
     }
   };
 
-  if (isLoading) {
+  if (authLoading || isLoading) {
     return (
       <div>
         <Header />
@@ -90,7 +97,17 @@ export default function ProfilePage() {
           <h1 className="text-3xl font-bold text-white text-center mb-8">Your Profile</h1>
           
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Profile Icons */}
+            <div className="flex justify-center">
+              <Image
+                src={userData.photoUrl || `/icon-${userData.profileIcon}.png`}
+                alt="Current profile avatar"
+                width={112}
+                height={112}
+                className="h-28 w-28 rounded-full border-2 border-line object-cover"
+                priority
+              />
+            </div>
+
             <fieldset className="space-y-2">
             <legend className="block text-white text-lg mb-4">Select Profile Icon</legend>
             <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
@@ -119,9 +136,8 @@ export default function ProfilePage() {
             </div>
               </fieldset>
 
-            {/* Username Field */}
-            <div>
-              <label htmlFor="profile-username" className="block text-white text-lg mb-2">Username</label>
+            {userData.username && <div>
+              <label htmlFor="profile-username" className="block text-white text-lg mb-2">Legacy username</label>
               <input
                 id="profile-username"
                 type="text"
@@ -129,44 +145,30 @@ export default function ProfilePage() {
                 readOnly
                 className="ui-field cursor-not-allowed opacity-70"
               />
+            </div>}
+
+            <div>
+              <label htmlFor="profile-display-name" className="block text-white text-lg mb-2">Display name</label>
+              <input
+                id="profile-display-name"
+                type="text"
+                name="displayName"
+                value={userData.displayName}
+                onChange={handleInputChange}
+                maxLength={160}
+                className="ui-field"
+                required
+              />
             </div>
 
-            {/* First and Last Name Fields */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label htmlFor="profile-first-name" className="block text-white text-lg mb-2">First Name</label>
-                <input
-                  id="profile-first-name"
-                  type="text"
-                  name="firstName"
-                  value={userData.firstName}
-                  onChange={handleInputChange}
-                  className="ui-field"
-                />
-              </div>
-              <div>
-                <label htmlFor="profile-last-name" className="block text-white text-lg mb-2">Last Name</label>
-                <input
-                  id="profile-last-name"
-                  type="text"
-                  name="lastName"
-                  value={userData.lastName}
-                  onChange={handleInputChange}
-                  className="ui-field"
-                />
-              </div>
-            </div>
-
-            {/* Email Field */}
             <div>
               <label htmlFor="profile-email" className="block text-white text-lg mb-2">Email</label>
               <input
                 id="profile-email"
                 type="email"
-                name="email"
                 value={userData.email}
-                onChange={handleInputChange}
-                className="ui-field"
+                readOnly
+                className="ui-field cursor-not-allowed opacity-70"
               />
             </div>
 
