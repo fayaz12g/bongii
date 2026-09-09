@@ -40,26 +40,41 @@ export const applyBoardOutcome = (snapshot, event) => {
   };
 };
 
-export const getCompletedLinePositions = ({ boardSize, tiles = [] }) => {
-  if (!Number.isInteger(boardSize) || boardSize < 1) return new Set();
+export const getCompletedLines = ({ boardSize, tiles = [] }) => {
+  if (!Number.isInteger(boardSize) || boardSize < 1) return [];
   const tileByPosition = new Map(tiles.map((tile) => [tile.position, tile]));
-  const rows = Array.from({ length: boardSize }, (_, row) => (
-    Array.from({ length: boardSize }, (__, column) => row * boardSize + column)
-  ));
-  const columns = Array.from({ length: boardSize }, (_, column) => (
-    Array.from({ length: boardSize }, (__, row) => row * boardSize + column)
-  ));
+  const rows = Array.from({ length: boardSize }, (_, row) => ({
+    positions: Array.from({ length: boardSize }, (__, column) => row * boardSize + column),
+    start: { x: 0.5, y: row + 0.5 },
+    end: { x: boardSize - 0.5, y: row + 0.5 },
+  }));
+  const columns = Array.from({ length: boardSize }, (_, column) => ({
+    positions: Array.from({ length: boardSize }, (__, row) => row * boardSize + column),
+    start: { x: column + 0.5, y: 0.5 },
+    end: { x: column + 0.5, y: boardSize - 0.5 },
+  }));
   const diagonals = [
-    Array.from({ length: boardSize }, (_, index) => index * boardSize + index),
-    Array.from({ length: boardSize }, (_, index) => (
-      index * boardSize + (boardSize - index - 1)
-    )),
+    {
+      positions: Array.from({ length: boardSize }, (_, index) => index * boardSize + index),
+      start: { x: 0.5, y: 0.5 },
+      end: { x: boardSize - 0.5, y: boardSize - 0.5 },
+    },
+    {
+      positions: Array.from({ length: boardSize }, (_, index) => (
+        index * boardSize + (boardSize - index - 1)
+      )),
+      start: { x: boardSize - 0.5, y: 0.5 },
+      end: { x: 0.5, y: boardSize - 0.5 },
+    },
   ];
-  const completed = [...rows, ...columns, ...diagonals].filter((line) => (
-    line.every((position) => {
+  return [...rows, ...columns, ...diagonals].filter((line) => (
+    line.positions.every((position) => {
       const tile = tileByPosition.get(position);
       return tile && (tile.isCenter || tile.outcome?.status === "happened");
     })
   ));
-  return new Set(completed.flat());
 };
+
+export const getCompletedLinePositions = (board) => new Set(
+  getCompletedLines(board).flatMap((line) => line.positions),
+);

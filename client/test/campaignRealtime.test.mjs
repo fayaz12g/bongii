@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   applyBoardOutcome,
   classifyCampaignVersion,
+  getCompletedLines,
   getCompletedLinePositions,
   shouldRefreshAfterJoin,
 } from "../src/app/utils/campaignRealtime.mjs";
@@ -97,6 +98,15 @@ test("finds completed rows, columns, and diagonals without counting failed tiles
   assert.deepEqual(
     [...getCompletedLinePositions({ boardSize: 3, tiles })].sort((left, right) => left - right),
     [0, 1, 2, 3, 4, 6, 8],
+  );
+  assert.deepEqual(
+    getCompletedLines({ boardSize: 3, tiles }).map(({ start, end }) => ({ start, end })),
+    [
+      { start: { x: 0.5, y: 0.5 }, end: { x: 2.5, y: 0.5 } },
+      { start: { x: 0.5, y: 0.5 }, end: { x: 0.5, y: 2.5 } },
+      { start: { x: 0.5, y: 0.5 }, end: { x: 2.5, y: 2.5 } },
+      { start: { x: 2.5, y: 0.5 }, end: { x: 0.5, y: 2.5 } },
+    ],
   );
 });
 

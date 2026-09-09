@@ -191,6 +191,16 @@ test("public board tiles can be moved with the keyboard", async ({ page }) => {
   await expect(cells.nth(1)).toBeFocused();
 });
 
+test("completed boards draw continuous winning lines", async ({ page }) => {
+  await page.goto("/boards/PLAY");
+  await expect(page.getByRole("heading", { level: 1, name: completedCampaign.title })).toBeVisible();
+
+  const overlay = page.locator("[data-completed-lines]");
+  await expect(overlay).toBeVisible();
+  await expect(overlay.locator("[data-completed-line]")).toHaveCount(1);
+  await expect(overlay.locator("line")).toHaveCount(2);
+});
+
 test("reduced motion persists and suppresses home particles", async ({ page }) => {
   await page.goto("/");
   await page.evaluate(() => localStorage.setItem("bongii-reduce-motion", "true"));

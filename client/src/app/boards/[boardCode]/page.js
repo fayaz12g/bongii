@@ -10,7 +10,11 @@ import Header from "@/app/components/header";
 import Footer from "@/app/components/footer";
 import { useBackground } from "../../components/context";
 import { useCampaignRealtime } from "../../hooks/useCampaignRealtime";
-import { applyBoardOutcome, getCompletedLinePositions } from "../../utils/campaignRealtime.mjs";
+import {
+  applyBoardOutcome,
+  getCompletedLinePositions,
+  getCompletedLines,
+} from "../../utils/campaignRealtime.mjs";
 
 const statusDetails = {
   open: { label: "Open", message: "Board submissions are still open." },
@@ -156,6 +160,7 @@ export default function PlayerBoardPage() {
     label: boardData.campaignStatus,
     message: "This submitted board is read-only.",
   };
+  const completedLines = getCompletedLines({ boardSize, tiles });
   const completedLinePositions = getCompletedLinePositions({ boardSize, tiles });
 
   return (
@@ -206,7 +211,7 @@ export default function PlayerBoardPage() {
         )}
 
         <div
-          className="grid gap-2 sm:gap-3 mx-auto"
+          className="relative grid gap-2 sm:gap-3 mx-auto"
           style={{ gridTemplateColumns: `repeat(${boardSize}, 1fr)` }}
           role="grid"
           aria-label={`${campaignTitle} board`}
@@ -225,19 +230,19 @@ export default function PlayerBoardPage() {
                     key={cell.position}
                     role="gridcell"
                     aria-label={`${cell.customText || cell.text || "Free space"}: ${outcomeLabel}${inCompletedLine ? ", completed line" : ""}`}
-                    className={`aspect-square min-w-0 overflow-hidden border-2 rounded-lg flex items-center justify-center p-1.5 sm:p-2 text-center ${
+                    className={`relative aspect-square min-w-0 overflow-hidden border-2 rounded-lg flex items-center justify-center p-1.5 sm:p-2 text-center ${
                       cell.isCenter
                         ? "border-amber-300 bg-amber-500/30 text-amber-50"
                         : outcome.className
                     } ${changed ? "outcome-tile-changed" : ""} ${inCompletedLine ? "completed-line-tile" : ""}`}
                   >
                     {cell.isCenter ? (
-                      <div className="text-center">
+                      <div className="relative z-20 text-center">
                         <User className="w-5 h-5 sm:w-6 sm:h-6 mx-auto mb-1" aria-hidden="true" />
                         <div className="text-xs break-words">{boardData.playerName || "Free Space"}</div>
                       </div>
                     ) : cell.categoryItemId ? (
-                      <div className="flex max-h-full min-w-0 flex-col items-center gap-0.5 overflow-hidden">
+                      <div className="relative z-20 flex max-h-full min-w-0 flex-col items-center gap-0.5 overflow-hidden">
                         <span className="flex max-w-full items-center justify-center gap-0.5 text-[9px] font-bold leading-none sm:text-[10px]">
                           <OutcomeIcon className="h-3 w-3 shrink-0" aria-hidden="true" />
                           <span className="break-words">{outcomeLabel}</span>
@@ -249,13 +254,50 @@ export default function PlayerBoardPage() {
                         </span>
                       </div>
                     ) : (
-                      <div className="text-xs">Empty</div>
+                      <div className="relative z-20 text-xs">Empty</div>
                     )}
                   </div>
                 );
               })}
             </div>
           ))}
+          {completedLines.length > 0 && (
+            <svg
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 z-10 h-full w-full overflow-visible"
+              data-completed-lines
+              preserveAspectRatio="none"
+              viewBox={`0 0 ${boardSize} ${boardSize}`}
+            >
+              {completedLines.map((line) => (
+                <g
+                  key={`${line.start.x}-${line.start.y}-${line.end.x}-${line.end.y}`}
+                  data-completed-line
+                >
+                  <line
+                    x1={line.start.x}
+                    y1={line.start.y}
+                    x2={line.end.x}
+                    y2={line.end.y}
+                    stroke="rgba(8, 12, 16, 0.82)"
+                    strokeLinecap="round"
+                    strokeWidth="10"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                  <line
+                    x1={line.start.x}
+                    y1={line.start.y}
+                    x2={line.end.x}
+                    y2={line.end.y}
+                    stroke="var(--color-focus)"
+                    strokeLinecap="round"
+                    strokeWidth="6"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                </g>
+              ))}
+            </svg>
+          )}
         </div>
       </main>
       <Footer />
