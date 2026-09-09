@@ -117,3 +117,91 @@ test('migrates a legacy schema once without losing campaign data', async () => {
     fs.rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test('preserves pre-existing orphan rows while applying the lifecycle migration', async () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'bongii-orphan-migration-'));
+  const databasePath = path.join(directory, 'legacy-orphans.db');
+
+  try {
+    const legacy = await configureConnection(await openConnection(databasePath));
+    await legacy.exec(`
+      PRAGMA foreign_keys = OFF;
+      CREATE TABLE users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT,
+        password TEXT,
+        firstName TEXT,
+        lastName TEXT,
+        email TEXT,
+        profileIcon TEXT
+      );
+      CREATE TABLE campaigns (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        code TEXT UNIQUE NOT NULL,
+        title TEXT NOT NULL,
+        backgroundPreset INTEGER DEFAULT 1,
+        boardSize INTEGER DEFAULT 3,
+        startDateTime TEXT NOT NULL,
+        status TEXT DEFAULT 'waiting',
+        createdBy INTEGER NOT NULL,
+        createdAt TEXT NOT NULL,
+        isActive BOOLEAN DEFAULT 1,
+        FOREIGN KEY (createdBy) REFERENCES users(id)
+      );
+      CREATE TABLE campaignCategories (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        campaignId INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        type TEXT NOT NULL,
+        required BOOLEAN DEFAULT 0,
+        orderIndex INTEGER DEFAULT 0,
+        FOREIGN KEY (campaignId) REFERENCES campaigns(id)
+      );
+      CREATE TABLE playerBoards (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        campaignId INTEGER NOT NULL,
+        userId INTEGER,
+        playerName TEXT,
+        boardCode TEXT UNIQUE NOT NULL,
+        createdAt TEXT NOT NULL,
+        FOREIGN KEY (campaignId) REFERENCES campaigns(id),
+        FOREIGN KEY (userId) REFERENCES users(id)
+      );
+      INSERT INTO campaignCategories (campaignId, name, type, required, orderIndex)
+      VALUES (99, 'Deleted Campaign Category', 'choose_many', 0, 0);
+      INSERT INTO playerBoards (campaignId, playerName, boardCode, createdAt)
+      VALUES (99, 'Orphaned Player', 'ORPH', '2026-09-01');
+    `);
+    await legacy.close();
+
+    const database = await BongiiDatabase.open(databasePath);
+    const migrations = await database.connection.all('SELECT id FROM schema_migrations ORDER BY id');
+    assert.deepEqual(
+      migrations.map((migration) => migration.id),
+      ['001_initial.js', '002_campaign_lifecycle.js'],
+    );
+
+    const category = await database.connection.get(
+      'SELECT campaignId, name FROM campaignCategories WHERE id = 1',
+    );
+    assert.deepEqual(category, { campaignId: 99, name: 'Deleted Campaign Category' });
+
+    const board = await database.connection.get(
+      'SELECT campaignId, playerName FROM playerBoards WHERE boardCode = ?',
+      ['ORPH'],
+    );
+    assert.deepEqual(board, { campaignId: 99, playerName: 'Orphaned Player' });
+
+    const violations = await database.connection.all('PRAGMA foreign_key_check');
+    assert.deepEqual(
+      violations.map(({ table, rowid, parent }) => ({ table, rowid, parent })),
+      [
+        { table: 'playerBoards', rowid: 1, parent: 'campaigns' },
+        { table: 'campaignCategories', rowid: 1, parent: 'campaigns' },
+      ],
+    );
+    await database.close();
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});

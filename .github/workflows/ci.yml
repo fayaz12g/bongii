@@ -24,6 +24,10 @@ jobs:
         working-directory: server
       - run: npm audit --omit=dev --audit-level=high
         working-directory: server
+      - name: Build server container
+        run: docker build --tag bongii-server-ci ./server
+      - name: Smoke-test server native modules
+        run: docker run --rm --entrypoint node bongii-server-ci -e "require('sqlite3'); console.log('sqlite3 loaded')"
 
   client:
     runs-on: ubuntu-latest

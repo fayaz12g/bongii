@@ -9,6 +9,17 @@ const checksum = (filePath) => crypto
   .update(fs.readFileSync(filePath))
   .digest('hex');
 
+const foreignKeyViolationKey = (violation) => JSON.stringify([
+  violation.table,
+  violation.rowid,
+  violation.parent,
+  violation.fkid,
+]);
+
+const describeForeignKeyViolation = (violation) => (
+  `${violation.table}(rowid=${violation.rowid}) -> ${violation.parent} (fkid=${violation.fkid})`
+);
+
 const migrate = async (connection) => {
   await connection.exec(`
     CREATE TABLE IF NOT EXISTS schema_migrations (
@@ -39,6 +50,9 @@ const migrate = async (connection) => {
 
     const migration = require(filePath);
     const disableForeignKeys = migration.disableForeignKeys === true;
+    const existingForeignKeyViolations = disableForeignKeys
+      ? await connection.all('PRAGMA foreign_key_check')
+      : [];
     if (disableForeignKeys) {
       await connection.exec('PRAGMA foreign_keys = OFF');
     }
@@ -49,8 +63,20 @@ const migrate = async (connection) => {
         await migration.up(connection);
         if (disableForeignKeys) {
           const violations = await connection.all('PRAGMA foreign_key_check');
+          const existingViolationKeys = new Set(
+            existingForeignKeyViolations.map(foreignKeyViolationKey),
+          );
+          const introducedViolations = violations.filter(
+            (violation) => !existingViolationKeys.has(foreignKeyViolationKey(violation)),
+          );
+          if (introducedViolations.length > 0) {
+            const details = introducedViolations.map(describeForeignKeyViolation).join(', ');
+            throw new Error(`Migration ${file} introduced foreign key violations: ${details}`);
+          }
           if (violations.length > 0) {
-            throw new Error(`Migration ${file} introduced foreign key violations`);
+            console.warn(
+              `Migration ${file} preserved ${violations.length} pre-existing foreign key violation(s)`,
+            );
           }
         }
         await connection.run(
