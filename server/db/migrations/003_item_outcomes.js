@@ -28,10 +28,7 @@ const up = async (connection) => {
         WHEN status IN ('pending', 'happened', 'did_not_happen') THEN status
         ELSE 'pending'
       END,
-      CASE
-        WHEN status IN ('correct', 'incorrect', 'happened', 'did_not_happen') THEN calledAt
-        ELSE NULL
-      END,
+      CASE WHEN status = 'pending' THEN NULL ELSE calledAt END,
       NULL
     FROM campaignCategoryItems;
 

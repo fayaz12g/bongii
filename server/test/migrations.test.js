@@ -1,10 +1,24 @@
 const assert = require('node:assert/strict');
+const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { test } = require('node:test');
 const { configureConnection, openConnection } = require('../db/connection');
 const { BongiiDatabase } = require('../db');
+
+test('keeps the production-applied outcome migration immutable', () => {
+  const migrationPath = path.join(__dirname, '../db/migrations/003_item_outcomes.js');
+  const migrationChecksum = crypto
+    .createHash('sha256')
+    .update(fs.readFileSync(migrationPath))
+    .digest('hex');
+
+  assert.equal(
+    migrationChecksum,
+    '0a1ac4690bc835ddc3265b3be04ce692d946ecdd1a8b924c59caf34a43d4d94c',
+  );
+});
 
 test('migrates a legacy schema once without losing campaign data', async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'bongii-migration-'));
@@ -209,6 +223,7 @@ test('migrates a legacy schema once without losing campaign data', async () => {
         '003_item_outcomes.js',
         '004_result_snapshots.js',
         '005_firebase_identity.js',
+        '006_clear_pending_outcome_dates.js',
       ],
     );
     await database.close();
@@ -283,6 +298,7 @@ test('preserves pre-existing orphan rows while applying the lifecycle migration'
         '003_item_outcomes.js',
         '004_result_snapshots.js',
         '005_firebase_identity.js',
+        '006_clear_pending_outcome_dates.js',
       ],
     );
 
