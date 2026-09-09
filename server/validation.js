@@ -53,7 +53,12 @@ const schemas = {
     startDateTime: requiredText(100),
     categories: z.array(z.object({
       name: requiredText(100),
-      type: z.enum(['choose_many', 'choose_one_required', 'choose_one_optional']),
+      type: z.enum([
+        'choose_many',
+        'choose_many_required',
+        'choose_one',
+        'choose_one_required',
+      ]),
       required: z.boolean().optional().default(false),
       items: z.array(requiredText(200)).min(1).max(200),
     })).min(1).max(50),
