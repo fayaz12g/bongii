@@ -42,9 +42,13 @@ export const campaignService = {
   },
 
   // Get all campaigns
-  async getCampaigns() {
+  async getCampaigns({ group, query } = {}) {
     try {
-      const response = await fetch(`${getServerPath()}/campaigns`, {
+      const searchParams = new URLSearchParams();
+      if (group) searchParams.set("group", group);
+      if (query) searchParams.set("query", query);
+      const search = searchParams.size > 0 ? `?${searchParams.toString()}` : "";
+      const response = await fetch(`${getServerPath()}/campaigns${search}`, {
         method: 'GET',
         headers: {
           "Content-type": "application/json; charset=UTF-8",
@@ -177,21 +181,34 @@ export const campaignService = {
     return res;
   },
 
-  // Call item correct/incorrect (moderator only)
-  async callCampaignItem(campaignCode, itemId, status) {
-    const res = await fetch(`${getServerPath()}/campaigns/${campaignCode}/call`, {
+  async updateItemOutcome(campaignCode, itemId, status) {
+    return fetch(`${getServerPath()}/campaigns/${campaignCode}/items/${itemId}/outcome`, {
       method: "POST",
-      body: JSON.stringify({
-        itemId: itemId,
-        status: status, // 'correct' or 'incorrect'
-      }),
+      body: JSON.stringify({ status }),
       headers: {
         "Content-type": "application/json; charset=UTF-8",
         "Authorization": `Bearer ${localStorage.getItem("token")}`
       }
     });
+  },
 
-    return Promise.resolve(res);
+  async finalizeCampaign(campaignCode) {
+    return fetch(`${getServerPath()}/campaigns/${campaignCode}/finalize`, {
+      method: "POST",
+      headers: {
+        "Content-type": "application/json; charset=UTF-8",
+        "Authorization": `Bearer ${localStorage.getItem("token")}`
+      }
+    });
+  },
+
+  async getCampaignResults(campaignCode, page = 1) {
+    return fetch(`${getServerPath()}/campaigns/${campaignCode}/results?page=${page}`, {
+      method: "GET",
+      headers: {
+        "Content-type": "application/json; charset=UTF-8"
+      }
+    });
   },
 
   // Delete campaign

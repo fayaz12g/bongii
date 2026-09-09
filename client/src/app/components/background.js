@@ -1,12 +1,16 @@
 import { useEffect, useRef } from "react";
+import { usePathname } from "next/navigation";
 import { useBackground } from "./context";
 
 const Background = ({}) => {
   const canvasRef = useRef(null);
-  const { showDots, showGradient, selectedPreset } = useBackground();
+  const pathname = usePathname();
+  const { reduceMotion, showDots, showGradient, selectedPreset } = useBackground();
+  const isHome = pathname === "/" || pathname === "/home";
+  const showParticles = isHome && showDots && !reduceMotion;
 
   useEffect(() => {
-    if (!showDots) return;
+    if (!showParticles) return;
 
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
@@ -181,18 +185,20 @@ const Background = ({}) => {
       canvas.removeEventListener('mousemove', handleMouseMove);
       canvas.removeEventListener('mouseleave', handleMouseLeave);
     };
-  }, [showDots, selectedPreset?.animation]); // Added selectedPreset?.animation to dependencies
+  }, [selectedPreset?.animation, showParticles]);
 
   return (
     <>
-      {showGradient && (
+      {!isHome && <div className="work-background fixed inset-0 -z-20" aria-hidden="true" />}
+      {isHome && showGradient && (
         <div
-          className={`min-h-screen fixed inset-0 -z-20 animate-gradient bg-gradient-to-r ${
+          className={`min-h-screen fixed inset-0 -z-20 bg-gradient-to-r ${
             selectedPreset?.gradient || "from-pink-500 via-red-500 to-yellow-500"
-          }`}
+          } ${reduceMotion ? "" : "animate-gradient"}`}
+          aria-hidden="true"
         />
       )}
-      {showDots && <canvas ref={canvasRef} className="fixed inset-0 -z-10" />}
+      {showParticles && <canvas ref={canvasRef} className="fixed inset-0 -z-10" aria-hidden="true" />}
     </>
   );
 };

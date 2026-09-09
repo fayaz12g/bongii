@@ -1,8 +1,30 @@
 // context.js
 "use client";
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useEffect, useState, useSyncExternalStore } from "react";
+import { MotionConfig } from "framer-motion";
 
 const BackgroundContext = createContext();
+const MOTION_STORAGE_KEY = "bongii-reduce-motion";
+const MOTION_EVENT = "bongii:motion-preference";
+
+const getMotionSnapshot = () => {
+  const stored = localStorage.getItem(MOTION_STORAGE_KEY);
+  if (stored === "true") return true;
+  if (stored === "false") return false;
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+};
+
+const subscribeToMotion = (callback) => {
+  const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+  window.addEventListener("storage", callback);
+  window.addEventListener(MOTION_EVENT, callback);
+  media.addEventListener("change", callback);
+  return () => {
+    window.removeEventListener("storage", callback);
+    window.removeEventListener(MOTION_EVENT, callback);
+    media.removeEventListener("change", callback);
+  };
+};
 
 export const BackgroundProvider = ({ children, selectedPreset: initialPreset }) => {
   const backgroundPresets = [
@@ -17,12 +39,37 @@ export const BackgroundProvider = ({ children, selectedPreset: initialPreset }) 
   const [showDots, setShowDots] = useState(true);
   const [showGradient, setShowGradient] = useState(true);
   const [selectedPreset, setSelectedPreset] = useState(initialPreset || backgroundPresets[0]);
+  const reduceMotion = useSyncExternalStore(subscribeToMotion, getMotionSnapshot, () => false);
+
+  useEffect(() => {
+    document.documentElement.dataset.reduceMotion = String(reduceMotion);
+  }, [reduceMotion]);
+
+  const setReduceMotion = (value) => {
+    localStorage.setItem(MOTION_STORAGE_KEY, String(value));
+    window.dispatchEvent(new Event(MOTION_EVENT));
+  };
 
   return (
     <BackgroundContext.Provider
-      value={{ showDots, setShowDots, showGradient, setShowGradient, selectedPreset, setSelectedPreset, backgroundPresets }}
+      value={{
+        showDots,
+        setShowDots,
+        showGradient,
+        setShowGradient,
+        selectedPreset,
+        setSelectedPreset,
+        backgroundPresets,
+        reduceMotion,
+        setReduceMotion,
+      }}
     >
-      {children}
+      <MotionConfig
+        reducedMotion={reduceMotion ? "always" : "never"}
+        transition={reduceMotion ? { duration: 0 } : undefined}
+      >
+        {children}
+      </MotionConfig>
     </BackgroundContext.Provider>
   );
 };

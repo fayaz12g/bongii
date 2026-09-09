@@ -1,13 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { User } from "lucide-react";
+import { Check, CircleDashed, RefreshCw, Trophy, User, Wifi, WifiOff, X } from "lucide-react";
 import { campaignService } from "../../services/campaignService";
 import Background from "@/app/components/background";
 import Header from "@/app/components/header";
 import Footer from "@/app/components/footer";
 import { useBackground } from "../../components/context";
+import { useCampaignRealtime } from "../../hooks/useCampaignRealtime";
+import { applyBoardOutcome, getCompletedLinePositions } from "../../utils/campaignRealtime.mjs";
 
 const statusDetails = {
   open: { label: "Open", message: "Board submissions are still open." },
@@ -17,43 +20,109 @@ const statusDetails = {
   cancelled: { label: "Cancelled", message: "This campaign was cancelled." },
 };
 
+const outcomeDetails = {
+  pending: {
+    label: "Pending",
+    icon: CircleDashed,
+    className: "border-line bg-panel-strong text-white",
+  },
+  happened: {
+    label: "Happened",
+    icon: Check,
+    className: "border-emerald-300 bg-happened text-white",
+  },
+  did_not_happen: {
+    label: "Did not happen",
+    icon: X,
+    className: "border-rose-300 bg-failed text-white",
+  },
+};
+
+const connectionLabels = {
+  connected: "Live",
+  connecting: "Connecting",
+  reconnecting: "Syncing updates",
+  error: "Live updates unavailable",
+};
+
 export default function PlayerBoardPage() {
   const { boardCode } = useParams();
   const router = useRouter();
   const [boardData, setBoardData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [changedOutcome, setChangedOutcome] = useState(null);
   const { setSelectedPreset } = useBackground();
 
-  // Track player marking state (null=unmarked, "right", "wrong")
-  const [marks, setMarks] = useState([]);
+  const refreshBoard = async () => {
+    const response = await campaignService.getPlayerBoard(boardCode);
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Failed to refresh board");
+    setBoardData(data);
+    setSelectedPreset(data.backgroundPreset);
+  };
 
   useEffect(() => {
+    let active = true;
     const fetchBoard = async () => {
       try {
         const res = await campaignService.getPlayerBoard(boardCode);
+        const data = await res.json();
+        if (!active) return;
         if (res.ok) {
-          const data = await res.json();
           setBoardData(data);
           setSelectedPreset(data.backgroundPreset);
-
-          // Initialize marking array
-          setMarks(Array(data.tiles.length).fill(null));
         } else if (res.status === 404) {
           setError("Board not found");
         } else {
-          setError("Failed to load board");
+          setError(data.error || "Failed to load board");
         }
       } catch (err) {
         console.error(err);
-        setError("Failed to fetch board");
+        if (active) setError("Failed to fetch board");
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     };
 
     if (boardCode) fetchBoard();
+    return () => {
+      active = false;
+    };
   }, [boardCode, setSelectedPreset]);
+
+  useEffect(() => {
+    if (!changedOutcome) return undefined;
+    const timeout = window.setTimeout(() => setChangedOutcome(null), 700);
+    return () => window.clearTimeout(timeout);
+  }, [changedOutcome]);
+
+  const { connectionState, reconnect } = useCampaignRealtime({
+    campaignCode: boardData?.campaignCode,
+    campaignVersion: boardData?.campaignVersion,
+    onFinalized: refreshBoard,
+    onOutcome(event) {
+      if (boardData?.tiles.some((tile) => tile.categoryItemId === event.itemId)) {
+        setChangedOutcome({ itemId: event.itemId, version: event.campaignVersion });
+      }
+      setBoardData((current) => {
+        const result = applyBoardOutcome(current, event);
+        return result.snapshot;
+      });
+    },
+    onRefreshRequested: refreshBoard,
+    onStatus(event) {
+      setBoardData((current) => (
+        !current || event.campaignVersion <= current.campaignVersion
+          ? current
+          : {
+              ...current,
+              campaignStatus: event.status,
+              campaignVersion: event.campaignVersion,
+            }
+      ));
+    },
+  });
 
   if (loading)
     return (
@@ -83,131 +152,112 @@ export default function PlayerBoardPage() {
 
   const { tiles, boardSize, campaignTitle } = boardData;
 
-  // Toggle mark state
-  const handleTileClick = (index) => {
-  setMarks((prev) => {
-    const next = [...prev];
-    if (next[index] === null) next[index] = "right";
-    else if (next[index] === "right") next[index] = "wrong";
-    else next[index] = null;
-    return next;
-  });
-};
-
-
   const campaignStatus = statusDetails[boardData.campaignStatus] || {
     label: boardData.campaignStatus,
     message: "This submitted board is read-only.",
   };
-
-  // Helper: check winning lines
-  const getWinningLines = () => {
-   const lines = [];
-    const size = boardSize;
-
-    // Rows
-    for (let r = 0; r < size; r++) {
-      const row = Array.from({ length: size }, (_, c) => r * size + c);
-      if (row.every((i) => marks[i] === "right")) lines.push(row);
-    }
-
-    // Columns
-    for (let c = 0; c < size; c++) {
-      const col = Array.from({ length: size }, (_, r) => r * size + c);
-      if (col.every((i) => marks[i] === "right")) lines.push(col);
-    }
-
-    // Diagonals
-    const diag1 = Array.from({ length: size }, (_, i) => i * size + i);
-    if (diag1.every((i) => marks[i] === "right")) lines.push(diag1);
-
-    const diag2 = Array.from({ length: size }, (_, i) => i * size + (size - 1 - i));
-    if (diag2.every((i) => marks[i] === "right")) lines.push(diag2);
-
-    return lines;
-  };
-
-  const winningLines = getWinningLines();
+  const completedLinePositions = getCompletedLinePositions({ boardSize, tiles });
 
   return (
-    <div className="min-h-screen">
+    <div className="app-page">
       <Background />
       <Header />
       <br />
       <br />
       <br />
 
-      <div className="max-w-5xl mx-auto relative">
-        <div className="mb-6 flex flex-wrap items-center gap-3">
-          <h1 className="text-3xl text-white font-bold">{campaignTitle}</h1>
-          <span className="rounded-md border border-white/30 bg-black/20 px-2.5 py-1 text-sm font-semibold text-white">
-            {campaignStatus.label}
-          </span>
+      <main className="max-w-3xl mx-auto px-4 pb-16 relative">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-3xl text-white font-bold">{campaignTitle}</h1>
+            <span className="rounded-md border border-white/30 bg-black/20 px-2.5 py-1 text-sm font-semibold text-white">
+              {campaignStatus.label}
+            </span>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-white" aria-live="polite">
+            {connectionState === "connected" ? (
+              <Wifi className="h-4 w-4 text-emerald-300" aria-hidden="true" />
+            ) : (
+              <WifiOff className="h-4 w-4 text-amber-300" aria-hidden="true" />
+            )}
+            <span>{connectionLabels[connectionState] || "Connecting"}</span>
+            {connectionState !== "connected" && (
+              <button
+                type="button"
+                onClick={reconnect}
+                className="rounded-md border border-white/30 p-1.5 hover:bg-white/10"
+                aria-label="Reconnect live updates"
+                title="Reconnect live updates"
+              >
+                <RefreshCw className="h-4 w-4" />
+              </button>
+            )}
+          </div>
         </div>
         <p className="text-gray-300 mb-6">{campaignStatus.message}</p>
+        {boardData.campaignStatus === "completed" && (
+          <Link
+            href={`/leaderboards/${boardData.campaignCode}`}
+            className="mb-6 inline-flex items-center gap-2 rounded-md bg-emerald-700 px-4 py-2 font-semibold text-white hover:bg-emerald-800"
+          >
+            <Trophy className="h-4 w-4" aria-hidden="true" />
+            View leaderboard
+          </Link>
+        )}
 
         <div
-          className="grid gap-4 mx-auto relative"
+          className="grid gap-2 sm:gap-3 mx-auto"
           style={{ gridTemplateColumns: `repeat(${boardSize}, 1fr)` }}
+          role="grid"
+          aria-label={`${campaignTitle} board`}
         >
-          {tiles.map((cell, index) => {
-            const mark = marks[index];
-            return (
-              <div
-                key={index}
-                onClick={() => handleTileClick(index)}
-                className={`aspect-square border-2 rounded-xl flex items-center justify-center p-2 text-center cursor-pointer transition-all
-                  ${
-                    mark === "right"
-                      ? "bg-green-500/70 border-green-400 text-white"
-                      : mark === "wrong"
-                      ? "bg-red-500/70 border-red-400 text-white"
-                      : cell.isCenter
-                      ? "bg-yellow-500/30 border-yellow-400 text-yellow-100"
-                      : cell.categoryItemId
-                      ? "bg-white/10 border-white/30 text-white"
-                      : "bg-gray-800/50 border-gray-600 text-gray-400"
-                  }`}
-              >
-                {cell.isCenter ? (
-                  <div className="text-center">
-                    <User className="w-6 h-6 mx-auto mb-1" />
-                    <div className="text-xs">{boardData.playerName || "Free Space"}</div>
+          {Array.from({ length: boardSize }, (_, rowIndex) => (
+            <div key={rowIndex} role="row" className="contents">
+              {tiles.slice(rowIndex * boardSize, (rowIndex + 1) * boardSize).map((cell) => {
+                const outcome = outcomeDetails[cell.outcome?.status] || outcomeDetails.pending;
+                const OutcomeIcon = outcome.icon;
+                const outcomeLabel = cell.isCenter ? "Free space" : outcome.label;
+                const changed = changedOutcome?.itemId === cell.categoryItemId
+                  && changedOutcome?.version === boardData.campaignVersion;
+                const inCompletedLine = completedLinePositions.has(cell.position);
+                return (
+                  <div
+                    key={cell.position}
+                    role="gridcell"
+                    aria-label={`${cell.customText || cell.text || "Free space"}: ${outcomeLabel}${inCompletedLine ? ", completed line" : ""}`}
+                    className={`aspect-square min-w-0 overflow-hidden border-2 rounded-lg flex items-center justify-center p-1.5 sm:p-2 text-center ${
+                      cell.isCenter
+                        ? "border-amber-300 bg-amber-500/30 text-amber-50"
+                        : outcome.className
+                    } ${changed ? "outcome-tile-changed" : ""} ${inCompletedLine ? "completed-line-tile" : ""}`}
+                  >
+                    {cell.isCenter ? (
+                      <div className="text-center">
+                        <User className="w-5 h-5 sm:w-6 sm:h-6 mx-auto mb-1" aria-hidden="true" />
+                        <div className="text-xs break-words">{boardData.playerName || "Free Space"}</div>
+                      </div>
+                    ) : cell.categoryItemId ? (
+                      <div className="flex max-h-full min-w-0 flex-col items-center gap-0.5 overflow-hidden">
+                        <span className="flex max-w-full items-center justify-center gap-0.5 text-[9px] font-bold leading-none sm:text-[10px]">
+                          <OutcomeIcon className="h-3 w-3 shrink-0" aria-hidden="true" />
+                          <span className="break-words">{outcomeLabel}</span>
+                        </span>
+                        <span className={`max-w-full overflow-hidden break-words leading-tight ${
+                          boardSize === 5 ? "text-[9px]" : boardSize === 4 ? "text-[10px]" : "text-xs"
+                        }`}>
+                          {cell.customText || cell.text}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="text-xs">Empty</div>
+                    )}
                   </div>
-                ) : cell.categoryItemId ? (
-                  <div className="text-xs break-words">
-                    {cell.customText || cell.text}
-                  </div>
-                ) : (
-                  <div className="text-xs">Empty</div>
-                )}
-              </div>
-            );
-          })}
-
-          {/* Overlay lines for winning bingos */}
-          {winningLines.map((line, i) => (
-            <svg
-              key={i}
-              className="absolute inset-0 pointer-events-none"
-              style={{ width: "100%", height: "100%" }}
-            >
-              <line
-                x1={`${(line[0] % boardSize) * (100 / boardSize) + 50 / boardSize}%`}
-                y1={`${Math.floor(line[0] / boardSize) * (100 / boardSize) + 50 / boardSize}%`}
-                x2={`${(line[line.length - 1] % boardSize) * (100 / boardSize) + 50 / boardSize}%`}
-                y2={`${
-                  Math.floor(line[line.length - 1] / boardSize) * (100 / boardSize) +
-                  50 / boardSize
-                }%`}
-                stroke="white"
-                strokeWidth="6"
-                strokeLinecap="round"
-              />
-            </svg>
+                );
+              })}
+            </div>
           ))}
         </div>
-      </div>
+      </main>
       <Footer />
     </div>
   );

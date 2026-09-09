@@ -14,17 +14,21 @@ const createTestContext = async () => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'bongii-test-'));
   const databasePath = path.join(directory, 'test.db');
   const database = await BongiiDatabase.open(databasePath);
-  const app = createApp({ database, config: testConfig });
-
-  return {
-    api: request(app),
+  const context = {
+    api: request(createApp({ database, config: testConfig })),
     database,
     databasePath,
+    async restart() {
+      await context.database.close();
+      context.database = await BongiiDatabase.open(databasePath);
+      context.api = request(createApp({ database: context.database, config: testConfig }));
+    },
     async cleanup() {
-      await database.close();
+      await context.database.close();
       fs.rmSync(directory, { recursive: true, force: true });
     },
   };
+  return context;
 };
 
 const createUserAndToken = async (api, suffix = '') => {

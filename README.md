@@ -4,7 +4,7 @@ Bongii is moderator-led prediction bingo. Players build a board while a campaign
 
 Try the deployed app at [bongii.fayaz.one](https://bongii.fayaz.one).
 
-> Status: early alpha. Phase 0 stabilization and Phase 1 campaign lifecycle are complete locally. Real-time moderation, final scoring, leaderboards, and Firebase Authentication remain planned work.
+> Status: early alpha. Phases 0 through 2 are complete locally. Final scoring, leaderboards, visual cleanup, and Firebase Authentication remain planned work.
 
 ## Current capabilities
 
@@ -12,11 +12,10 @@ Try the deployed app at [bongii.fayaz.one](https://bongii.fayaz.one).
 - Create a campaign with categories, items, a board size, and a start time.
 - Publish, lock, reopen, moderate, or cancel a campaign through owner-only lifecycle controls.
 - Browse campaigns and create an anonymous board with a shareable code.
-- View lifecycle status and read-only campaign and board states.
-- Persist moderator item outcomes through the API.
+- Import an editable campaign draft from JSON or download an example schema.
+- Moderate three-state item outcomes and publish versioned updates through Socket.IO.
+- Watch read-only boards update from authoritative server outcomes, including reconnect recovery.
 - Edit a basic local profile and choose a preset avatar.
-
-The current board page still lets each viewer mark tiles only in local React state. Those marks are lost on refresh and are not authoritative. Moderator outcome controls, real-time updates, and finalization remain future phases.
 
 ## Plans and specifications
 
@@ -27,7 +26,7 @@ The current board page still lets each viewer mark tiles only in local React sta
 | [Technical design](docs/TECHNICAL_DESIGN.md) | Database migration, REST and Socket.IO contracts, finalization transaction, Firebase Auth, testing, and rollout |
 | [Operations runbook](docs/OPERATIONS.md) | Environment variables, migrations, production backup checks, release verification, and rollback |
 
-The next development milestone is Phase 2 in the implementation plan: add moderator-controlled, real-time item outcomes and authoritative board rendering.
+The next development milestone is Phase 3 in the implementation plan: add deterministic scoring, atomic finalization, and campaign leaderboards.
 
 ## Architecture
 
@@ -37,7 +36,7 @@ The next development milestone is Phase 2 in the implementation plan: add modera
 | API | Node.js, Express 5 |
 | Data | SQLite on a Fly.io persistent volume |
 | Authentication | Temporary custom JWT flow backed by SQLite |
-| Real-time transport | Not implemented; Socket.IO is planned |
+| Real-time transport | Socket.IO campaign rooms with REST snapshot recovery |
 | Hosting | Vercel for the client, Fly.io for the API |
 
 ```text
@@ -88,11 +87,12 @@ Local development defaults to `server/data/bongii.db` and `http://localhost:3000
 | Directory | Command | Purpose |
 | --- | --- | --- |
 | `client` | `npm run dev` | Start Next.js on port 3001 |
+| `client` | `npm test` | Run realtime versioning and campaign import tests |
 | `client` | `npm run lint` | Run the Next.js ESLint rules |
 | `client` | `npm run build` | Create a production client build |
 | `client` | `npm run start` | Run the production client build |
 | `server` | `npm start` | Start Express on port 3000 |
-| `server` | `npm test` | Run API, authorization, and migration tests |
+| `server` | `npm test` | Run API, authorization, migration, CORS, and Socket.IO tests |
 | `server` | `npm run db:migrate` | Apply pending SQLite migrations without starting HTTP |
 
 GitHub Actions runs server tests, client lint and build, and production dependency audits on pushes to `main` and pull requests.

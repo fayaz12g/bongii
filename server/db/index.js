@@ -1,6 +1,16 @@
 const crypto = require('crypto');
 const { configureConnection, openConnection } = require('./connection');
 const { migrate } = require('./migrate');
+const { RULES_VERSION, rankBoards, scoreBoard } = require('../scoring');
+
+const RESULTS_PAGE_SIZE = 20;
+const BROWSE_GROUP_STATUSES = Object.freeze({
+  open: ['open'],
+  awaiting: ['locked', 'moderating'],
+  results: ['completed'],
+});
+
+const escapeLike = (value) => value.replace(/[\\%_]/g, '\\$&');
 
 class DomainError extends Error {
   constructor(message, statusCode = 400) {
@@ -14,6 +24,14 @@ const generateCode = () => {
   const bytes = crypto.randomBytes(4);
   return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join('');
 };
+
+const toPublicCampaign = ({ createdBy, ...campaign }) => ({
+  ...campaign,
+  categories: campaign.categories.map((category) => ({
+    ...category,
+    items: category.items.map(({ decidedBy, ...item }) => item),
+  })),
+});
 
 class BongiiDatabase {
   constructor(databasePath, connection) {
@@ -129,16 +147,33 @@ class BongiiDatabase {
        WHERE code = ? AND status IN ('open', 'locked', 'moderating', 'completed')`,
       [code.toUpperCase()],
     );
-    return this.enrichCampaign(campaign);
+    const enriched = await this.enrichCampaign(campaign);
+    return enriched ? toPublicCampaign(enriched) : null;
   }
 
-  async getAllCampaigns() {
+  async getAllCampaigns({ group, query } = {}) {
+    const statuses = group
+      ? BROWSE_GROUP_STATUSES[group]
+      : ['open', 'locked', 'moderating', 'completed'];
+    const placeholders = statuses.map(() => '?').join(', ');
+    const params = [...statuses];
+    const titlePredicate = query ? " AND title LIKE ? ESCAPE '\\'" : '';
+    if (query) params.push(`%${escapeLike(query)}%`);
+
     const campaigns = await this.connection.all(
       `SELECT * FROM campaigns
-       WHERE status IN ('open', 'locked', 'moderating', 'completed')
-       ORDER BY startDateTime, createdAt DESC`,
+       WHERE status IN (${placeholders})${titlePredicate}
+       ORDER BY CASE
+         WHEN status = 'open' THEN publishedAt
+         WHEN status IN ('locked', 'moderating') THEN COALESCE(moderationStartedAt, boardCreationClosedAt)
+         WHEN status = 'completed' THEN finalizedAt
+       END DESC, createdAt DESC, id DESC`,
+      params,
     );
-    return Promise.all(campaigns.map((campaign) => this.enrichCampaign(campaign)));
+    const enriched = await Promise.all(
+      campaigns.map((campaign) => this.enrichCampaign(campaign)),
+    );
+    return enriched.map(toPublicCampaign);
   }
 
   async getUserCampaigns(userId) {
@@ -296,9 +331,10 @@ class BongiiDatabase {
     return this.getPlayerBoardByCode(boardCode);
   }
 
-  getPlayerBoardTiles(boardId) {
-    return this.connection.all(
+  async getPlayerBoardTiles(boardId, connection = this.connection) {
+    const tiles = await connection.all(
       `SELECT pbt.*, cci.text, cci.status AS itemStatus,
+              cci.decidedAt, cci.decidedBy,
               cc.name AS categoryName, cc.type AS categoryType
        FROM playerBoardTiles pbt
        LEFT JOIN campaignCategoryItems cci ON pbt.categoryItemId = cci.id
@@ -307,6 +343,14 @@ class BongiiDatabase {
        ORDER BY pbt.position`,
       [boardId],
     );
+
+    return tiles.map(({ decidedAt, decidedBy, ...tile }) => ({
+      ...tile,
+      outcome: {
+        status: tile.isCenter ? 'happened' : (tile.itemStatus || 'pending'),
+        decidedAt: tile.isCenter ? null : decidedAt,
+      },
+    }));
   }
 
   async getPlayerBoardByCode(boardCode) {
@@ -326,7 +370,8 @@ class BongiiDatabase {
       this.getPlayerBoardTiles(board.id),
       this.getBackgroundPreset(board.presetId),
     ]);
-    return { ...board, tiles, backgroundPreset };
+    const { userId, ...publicBoard } = board;
+    return { ...publicBoard, tiles, backgroundPreset };
   }
 
   async listBoards(campaignCode) {
@@ -354,7 +399,8 @@ class BongiiDatabase {
         this.getPlayerBoardTiles(board.id),
         this.connection.get('SELECT COUNT(*) AS count FROM playerBoards WHERE campaignId = ?', [board.campaignId]),
       ]);
-      return { ...board, backgroundPreset, selectedTiles, playerCount: count.count };
+      const { userId, ...publicBoard } = board;
+      return { ...publicBoard, backgroundPreset, selectedTiles, playerCount: count.count };
     }));
   }
 
@@ -364,6 +410,215 @@ class BongiiDatabase {
 
   getCampaignBoards(campaignCode) {
     return this.listBoards(campaignCode);
+  }
+
+  async getCampaignResults(campaignCode, page = 1, connection = this.connection) {
+    const campaignResult = await connection.get(
+      `SELECT cr.id AS resultId, cr.finalizedAt, cr.rulesVersion,
+              c.code, c.title, c.boardSize, c.status, c.version,
+              c.backgroundPreset AS presetId,
+              (SELECT COUNT(*) FROM boardResults br
+               WHERE br.campaignResultId = cr.id) AS totalResults
+       FROM campaignResults cr
+       JOIN campaigns c ON c.id = cr.campaignId
+       WHERE c.code = ?`,
+      [campaignCode.toUpperCase()],
+    );
+    if (!campaignResult) return null;
+
+    const offset = (page - 1) * RESULTS_PAGE_SIZE;
+    const rows = await connection.all(
+      `SELECT br.boardId, br.rank, br.longestRun,
+              br.completedLineCount, br.matchedTileCount,
+              pb.playerName, pb.boardCode,
+              (SELECT COUNT(*) FROM boardResults tied
+               WHERE tied.campaignResultId = br.campaignResultId
+                 AND tied.rank = br.rank) AS rankCount
+       FROM boardResults br
+       JOIN playerBoards pb ON pb.id = br.boardId
+       WHERE br.campaignResultId = ?
+       ORDER BY br.rank, COALESCE(pb.playerName, ''), pb.boardCode
+       LIMIT ? OFFSET ?`,
+      [campaignResult.resultId, RESULTS_PAGE_SIZE, offset],
+    );
+    const results = await Promise.all(rows.map(async ({ boardId, rankCount, ...row }) => {
+      const tiles = await this.getPlayerBoardTiles(boardId, connection);
+      return {
+        ...row,
+        sharedRank: rankCount > 1,
+        tiles: tiles.map((tile) => ({
+          position: tile.position,
+          isCenter: tile.isCenter,
+          text: tile.text,
+          customText: tile.customText,
+          outcome: tile.outcome,
+        })),
+      };
+    }));
+    const backgroundPreset = await this.getBackgroundPreset(campaignResult.presetId, connection);
+
+    return {
+      campaign: {
+        code: campaignResult.code,
+        title: campaignResult.title,
+        boardSize: campaignResult.boardSize,
+        status: campaignResult.status,
+        version: campaignResult.version,
+        finalizedAt: campaignResult.finalizedAt,
+        rulesVersion: campaignResult.rulesVersion,
+        backgroundPreset,
+      },
+      results,
+      pagination: {
+        page,
+        pageSize: RESULTS_PAGE_SIZE,
+        totalItems: campaignResult.totalResults,
+        totalPages: Math.max(1, Math.ceil(campaignResult.totalResults / RESULTS_PAGE_SIZE)),
+      },
+    };
+  }
+
+  finalizeCampaign(campaignCode, finalizedBy, finalizedAt) {
+    return this.transaction(async (connection) => {
+      const campaign = await connection.get(
+        'SELECT * FROM campaigns WHERE code = ?',
+        [campaignCode.toUpperCase()],
+      );
+      if (!campaign) throw new DomainError('Campaign not found', 404);
+      if (campaign.createdBy !== finalizedBy) {
+        throw new DomainError('Only the campaign creator can finalize it', 403);
+      }
+
+      const existingResult = await connection.get(
+        'SELECT id FROM campaignResults WHERE campaignId = ?',
+        [campaign.id],
+      );
+      if (existingResult) {
+        const snapshot = await this.getCampaignResults(campaign.code, 1, connection);
+        return {
+          campaignCode: campaign.code,
+          campaignVersion: snapshot.campaign.version,
+          status: snapshot.campaign.status,
+          finalizedAt: snapshot.campaign.finalizedAt,
+          pendingResolved: 0,
+          alreadyFinalized: true,
+          result: snapshot,
+        };
+      }
+      if (campaign.status !== 'moderating') {
+        throw new DomainError(`Cannot finalize a ${campaign.status} campaign`, 409);
+      }
+
+      const pending = await connection.get(
+        `SELECT COUNT(*) AS count
+         FROM campaignCategoryItems cci
+         JOIN campaignCategories cc ON cc.id = cci.categoryId
+         WHERE cc.campaignId = ? AND cci.status = 'pending'`,
+        [campaign.id],
+      );
+      await connection.run(
+        `UPDATE campaignCategoryItems
+         SET status = 'did_not_happen', decidedAt = ?, decidedBy = ?
+         WHERE status = 'pending' AND categoryId IN (
+           SELECT id FROM campaignCategories WHERE campaignId = ?
+         )`,
+        [finalizedAt, finalizedBy, campaign.id],
+      );
+
+      const outcomes = await connection.all(
+        `SELECT cci.id, cci.status
+         FROM campaignCategoryItems cci
+         JOIN campaignCategories cc ON cc.id = cci.categoryId
+         WHERE cc.campaignId = ?`,
+        [campaign.id],
+      );
+      const outcomeByItemId = new Map(outcomes.map((outcome) => [outcome.id, outcome.status]));
+      const boards = await connection.all(
+        `SELECT id, playerName, boardCode
+         FROM playerBoards
+         WHERE campaignId = ?
+         ORDER BY id`,
+        [campaign.id],
+      );
+      const tileRows = await connection.all(
+        `SELECT pbt.boardId, pbt.categoryItemId, pbt.position, pbt.isCenter
+         FROM playerBoardTiles pbt
+         JOIN playerBoards pb ON pb.id = pbt.boardId
+         WHERE pb.campaignId = ?
+         ORDER BY pbt.boardId, pbt.position`,
+        [campaign.id],
+      );
+      const tilesByBoardId = new Map(boards.map((board) => [board.id, []]));
+      for (const tile of tileRows) tilesByBoardId.get(tile.boardId)?.push(tile);
+
+      const scores = boards.map((board) => {
+        const score = scoreBoard({
+          boardSize: campaign.boardSize,
+          tiles: tilesByBoardId.get(board.id),
+          outcomeByItemId,
+        });
+        if (score.integrityWarnings.length > 0) {
+          console.warn('Scoring integrity warning', {
+            campaignCode: campaign.code,
+            boardCode: board.boardCode,
+            warnings: score.integrityWarnings,
+          });
+        }
+        return {
+          boardId: board.id,
+          boardCode: board.boardCode,
+          playerName: board.playerName,
+          longestRun: score.longestRun,
+          completedLineCount: score.completedLineCount,
+          matchedTileCount: score.matchedTileCount,
+        };
+      });
+      const ranked = rankBoards(scores);
+
+      const campaignResultInsert = await connection.run(
+        `INSERT INTO campaignResults
+          (campaignId, finalizedAt, finalizedBy, rulesVersion)
+         VALUES (?, ?, ?, ?)`,
+        [campaign.id, finalizedAt, finalizedBy, RULES_VERSION],
+      );
+      for (const score of ranked) {
+        await connection.run(
+          `INSERT INTO boardResults
+            (campaignResultId, boardId, rank, longestRun,
+             completedLineCount, matchedTileCount)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+          [
+            campaignResultInsert.lastID,
+            score.boardId,
+            score.rank,
+            score.longestRun,
+            score.completedLineCount,
+            score.matchedTileCount,
+          ],
+        );
+      }
+
+      const update = await connection.run(
+        `UPDATE campaigns
+         SET status = 'completed', finalizedAt = ?, version = version + 1
+         WHERE id = ? AND status = 'moderating'`,
+        [finalizedAt, campaign.id],
+      );
+      if (update.changes !== 1) {
+        throw new DomainError('Campaign changed; refresh and try again', 409);
+      }
+
+      const snapshot = await this.getCampaignResults(campaign.code, 1, connection);
+      return {
+        campaignCode: campaign.code,
+        campaignVersion: snapshot.campaign.version,
+        status: snapshot.campaign.status,
+        finalizedAt,
+        pendingResolved: pending.count,
+        alreadyFinalized: false,
+        result: snapshot,
+      };
+    });
   }
 
   transitionCampaign(campaign, status, lifecycle) {
@@ -393,15 +648,51 @@ class BongiiDatabase {
     });
   }
 
-  updateCampaignCategoryItemStatus(campaignId, itemId, status) {
-    return this.connection.run(
-      `UPDATE campaignCategoryItems
-       SET status = ?, calledAt = ?
-       WHERE id = ? AND categoryId IN (
-         SELECT id FROM campaignCategories WHERE campaignId = ?
-       )`,
-      [status, new Date().toISOString(), itemId, campaignId],
-    );
+  updateItemOutcome(campaignCode, itemId, status, decidedBy) {
+    return this.transaction(async (connection) => {
+      const campaign = await connection.get(
+        'SELECT * FROM campaigns WHERE code = ?',
+        [campaignCode.toUpperCase()],
+      );
+      if (!campaign) throw new DomainError('Campaign not found', 404);
+      if (campaign.createdBy !== decidedBy) {
+        throw new DomainError('Only the campaign creator can decide outcomes', 403);
+      }
+      if (campaign.status !== 'moderating') {
+        throw new DomainError('Campaign is not being moderated', 409);
+      }
+
+      const decidedAt = status === 'pending' ? null : new Date().toISOString();
+      const moderatorId = status === 'pending' ? null : decidedBy;
+      const result = await connection.run(
+        `UPDATE campaignCategoryItems
+         SET status = ?, decidedAt = ?, decidedBy = ?
+         WHERE id = ? AND categoryId IN (
+           SELECT id FROM campaignCategories WHERE campaignId = ?
+         )`,
+        [status, decidedAt, moderatorId, itemId, campaign.id],
+      );
+      if (result.changes === 0) throw new DomainError('Campaign item not found', 404);
+
+      await connection.run(
+        'UPDATE campaigns SET version = version + 1 WHERE id = ?',
+        [campaign.id],
+      );
+      const updated = await connection.get(
+        'SELECT version FROM campaigns WHERE id = ?',
+        [campaign.id],
+      );
+      return {
+        campaignCode: campaign.code,
+        campaignVersion: updated.version,
+        outcome: {
+          itemId,
+          status,
+          decidedAt,
+          decidedBy: moderatorId,
+        },
+      };
+    });
   }
 
   async deleteCampaign(campaignId) {

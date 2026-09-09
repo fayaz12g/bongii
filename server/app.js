@@ -1,10 +1,13 @@
+const { EventEmitter } = require('node:events');
+const http = require('node:http');
 const cors = require('cors');
 const express = require('express');
 const helmet = require('helmet');
 const { DomainError } = require('./db');
+const { createRealtimeServer } = require('./realtime');
 const { createRouter } = require('./routes');
 
-const createApp = ({ database, config }) => {
+const createApp = ({ database, config, campaignEvents }) => {
   const app = express();
 
   app.disable('x-powered-by');
@@ -15,7 +18,7 @@ const createApp = ({ database, config }) => {
     },
   }));
   app.use(express.json({ limit: '100kb' }));
-  app.use('/api', createRouter({ database, config }));
+  app.use('/api', createRouter({ database, config, campaignEvents }));
 
   app.use((req, res) => {
     res.status(404).json({ error: 'Not found' });
@@ -37,4 +40,18 @@ const createApp = ({ database, config }) => {
   return app;
 };
 
-module.exports = { createApp };
+const createApiServer = ({ database, config, logger = console }) => {
+  const campaignEvents = new EventEmitter();
+  const app = createApp({ database, config, campaignEvents });
+  const server = http.createServer(app);
+  const realtime = createRealtimeServer({
+    server,
+    database,
+    config,
+    campaignEvents,
+    logger,
+  });
+  return { app, campaignEvents, realtime, server };
+};
+
+module.exports = { createApiServer, createApp };

@@ -42,6 +42,12 @@ jobs:
           cache-dependency-path: client/package-lock.json
       - run: npm ci
         working-directory: client
+      - run: npm test
+        working-directory: client
+      - run: npx playwright install --with-deps chromium
+        working-directory: client
+      - run: npm run test:a11y
+        working-directory: client
       - run: npm run lint
         working-directory: client
       - run: npm run build

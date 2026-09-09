@@ -3,3 +3,4 @@ data
 .env
 !server/.env.example
 test.db
+*.DS_Store

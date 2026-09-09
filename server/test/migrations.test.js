@@ -44,6 +44,15 @@ test('migrates a legacy schema once without losing campaign data', async () => {
         orderIndex INTEGER DEFAULT 0,
         FOREIGN KEY (campaignId) REFERENCES campaigns(id)
       );
+      CREATE TABLE campaignCategoryItems (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        categoryId INTEGER NOT NULL,
+        text TEXT NOT NULL,
+        orderIndex INTEGER DEFAULT 0,
+        status TEXT DEFAULT 'pending',
+        calledAt TEXT,
+        FOREIGN KEY (categoryId) REFERENCES campaignCategories(id)
+      );
       CREATE TABLE playerBoards (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         campaignId INTEGER NOT NULL,
@@ -54,6 +63,17 @@ test('migrates a legacy schema once without losing campaign data', async () => {
         FOREIGN KEY (campaignId) REFERENCES campaigns(id),
         FOREIGN KEY (userId) REFERENCES users(id)
       );
+      CREATE TABLE playerBoardTiles (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        boardId INTEGER NOT NULL,
+        categoryItemId INTEGER,
+        position INTEGER NOT NULL,
+        isCenter BOOLEAN DEFAULT 0,
+        customText TEXT,
+        FOREIGN KEY (boardId) REFERENCES playerBoards(id),
+        FOREIGN KEY (categoryItemId) REFERENCES campaignCategoryItems(id),
+        UNIQUE(boardId, position)
+      );
       INSERT INTO users (username, password, firstName, lastName)
       VALUES ('legacy', 'plaintext', 'Legacy', 'Owner');
       INSERT INTO campaigns
@@ -63,8 +83,15 @@ test('migrates a legacy schema once without losing campaign data', async () => {
         ('LIVE', 'Active Campaign', 1, 3, '2026-09-08', 'active', 1, '2026-09-02');
       INSERT INTO campaignCategories (campaignId, name, type, required, orderIndex)
       VALUES (1, 'Legacy Category', 'choose_many', 1, 0);
+      INSERT INTO campaignCategoryItems (categoryId, text, orderIndex, status, calledAt)
+      VALUES
+        (1, 'Legacy success', 0, 'correct', '2026-09-04'),
+        (1, 'Legacy failure', 1, 'incorrect', '2026-09-05'),
+        (1, 'Unknown legacy value', 2, 'unknown', '2026-09-06');
       INSERT INTO playerBoards (campaignId, playerName, boardCode, createdAt)
       VALUES (1, 'Legacy Player', 'KEEP', '2026-09-03');
+      INSERT INTO playerBoardTiles (boardId, categoryItemId, position, isCenter)
+      VALUES (1, 1, 0, 0);
     `);
     await legacy.close();
 
@@ -81,6 +108,23 @@ test('migrates a legacy schema once without losing campaign data', async () => {
 
     const board = await database.getPlayerBoardByCode('KEEP');
     assert.equal(board.playerName, 'Legacy Player');
+    assert.equal(board.tiles.length, 1);
+    assert.equal(board.tiles[0].categoryItemId, 1);
+    assert.deepEqual(board.tiles[0].outcome, {
+      status: 'happened',
+      decidedAt: '2026-09-04',
+    });
+
+    const outcomes = await database.connection.all(`
+      SELECT status, decidedAt, decidedBy
+      FROM campaignCategoryItems
+      ORDER BY id
+    `);
+    assert.deepEqual(outcomes, [
+      { status: 'happened', decidedAt: '2026-09-04', decidedBy: null },
+      { status: 'did_not_happen', decidedAt: '2026-09-05', decidedBy: null },
+      { status: 'pending', decidedAt: null, decidedBy: null },
+    ]);
 
     const foreignKeyErrors = await database.connection.all('PRAGMA foreign_key_check');
     assert.deepEqual(foreignKeyErrors, []);
@@ -100,8 +144,44 @@ test('migrates a legacy schema once without losing campaign data', async () => {
       assert.equal(campaignColumns.some((candidate) => candidate.name === column), true);
     }
 
+    const outcomeColumns = await database.connection.all(
+      'PRAGMA table_info(campaignCategoryItems)',
+    );
+    for (const column of ['decidedAt', 'decidedBy']) {
+      assert.equal(outcomeColumns.some((candidate) => candidate.name === column), true);
+    }
+
+    const campaignResultColumns = await database.connection.all(
+      'PRAGMA table_info(campaignResults)',
+    );
+    assert.deepEqual(
+      campaignResultColumns.map((column) => column.name),
+      ['id', 'campaignId', 'finalizedAt', 'finalizedBy', 'rulesVersion'],
+    );
+    const boardResultColumns = await database.connection.all(
+      'PRAGMA table_info(boardResults)',
+    );
+    assert.deepEqual(
+      boardResultColumns.map((column) => column.name),
+      [
+        'id',
+        'campaignResultId',
+        'boardId',
+        'rank',
+        'longestRun',
+        'completedLineCount',
+        'matchedTileCount',
+      ],
+    );
+
     await assert.rejects(
       database.connection.run("UPDATE campaigns SET status = 'invalid' WHERE code = 'OLDY'"),
+      /CHECK constraint failed/,
+    );
+    await assert.rejects(
+      database.connection.run(
+        "UPDATE campaignCategoryItems SET status = 'invalid' WHERE id = 1",
+      ),
       /CHECK constraint failed/,
     );
     await database.close();
@@ -110,7 +190,12 @@ test('migrates a legacy schema once without losing campaign data', async () => {
     const migrations = await database.connection.all('SELECT id FROM schema_migrations');
     assert.deepEqual(
       migrations.map((migration) => migration.id),
-      ['001_initial.js', '002_campaign_lifecycle.js'],
+      [
+        '001_initial.js',
+        '002_campaign_lifecycle.js',
+        '003_item_outcomes.js',
+        '004_result_snapshots.js',
+      ],
     );
     await database.close();
   } finally {
@@ -178,7 +263,12 @@ test('preserves pre-existing orphan rows while applying the lifecycle migration'
     const migrations = await database.connection.all('SELECT id FROM schema_migrations ORDER BY id');
     assert.deepEqual(
       migrations.map((migration) => migration.id),
-      ['001_initial.js', '002_campaign_lifecycle.js'],
+      [
+        '001_initial.js',
+        '002_campaign_lifecycle.js',
+        '003_item_outcomes.js',
+        '004_result_snapshots.js',
+      ],
     );
 
     const category = await database.connection.get(

@@ -1,0 +1,178 @@
+{
+  "scoreCases": [
+    {
+      "name": "empty 3 by 3 board",
+      "boardSize": 3,
+      "empty": true,
+      "expected": { "longestRun": 0, "completedLineCount": 0, "matchedTileCount": 0 }
+    },
+    {
+      "name": "3 by 3 center free space with all other tiles red",
+      "boardSize": 3,
+      "expected": { "longestRun": 1, "completedLineCount": 0, "matchedTileCount": 1 }
+    },
+    {
+      "name": "4 by 4 center free space with all other tiles red",
+      "boardSize": 4,
+      "expected": { "longestRun": 1, "completedLineCount": 0, "matchedTileCount": 1 }
+    },
+    {
+      "name": "5 by 5 center free space with all other tiles red",
+      "boardSize": 5,
+      "expected": { "longestRun": 1, "completedLineCount": 0, "matchedTileCount": 1 }
+    },
+    {
+      "name": "all-green 3 by 3 board",
+      "boardSize": 3,
+      "allHappened": true,
+      "expected": { "longestRun": 3, "completedLineCount": 8, "matchedTileCount": 9 }
+    },
+    {
+      "name": "all-green 4 by 4 board",
+      "boardSize": 4,
+      "allHappened": true,
+      "expected": { "longestRun": 4, "completedLineCount": 10, "matchedTileCount": 16 }
+    },
+    {
+      "name": "all-green 5 by 5 board",
+      "boardSize": 5,
+      "allHappened": true,
+      "expected": { "longestRun": 5, "completedLineCount": 12, "matchedTileCount": 25 }
+    },
+    {
+      "name": "3 by 3 center row",
+      "boardSize": 3,
+      "happenedPositions": [3, 5],
+      "expected": { "longestRun": 3, "completedLineCount": 1, "matchedTileCount": 3 }
+    },
+    {
+      "name": "3 by 3 center column",
+      "boardSize": 3,
+      "happenedPositions": [1, 7],
+      "expected": { "longestRun": 3, "completedLineCount": 1, "matchedTileCount": 3 }
+    },
+    {
+      "name": "3 by 3 primary diagonal",
+      "boardSize": 3,
+      "happenedPositions": [0, 8],
+      "expected": { "longestRun": 3, "completedLineCount": 1, "matchedTileCount": 3 }
+    },
+    {
+      "name": "3 by 3 anti-diagonal",
+      "boardSize": 3,
+      "happenedPositions": [2, 6],
+      "expected": { "longestRun": 3, "completedLineCount": 1, "matchedTileCount": 3 }
+    },
+    {
+      "name": "4 by 4 free-space row",
+      "boardSize": 4,
+      "happenedPositions": [9, 10, 11],
+      "expected": { "longestRun": 4, "completedLineCount": 1, "matchedTileCount": 4 }
+    },
+    {
+      "name": "4 by 4 free-space column",
+      "boardSize": 4,
+      "happenedPositions": [0, 4, 12],
+      "expected": { "longestRun": 4, "completedLineCount": 1, "matchedTileCount": 4 }
+    },
+    {
+      "name": "4 by 4 primary diagonal",
+      "boardSize": 4,
+      "happenedPositions": [0, 5, 10, 15],
+      "expected": { "longestRun": 4, "completedLineCount": 1, "matchedTileCount": 5 }
+    },
+    {
+      "name": "4 by 4 anti-diagonal",
+      "boardSize": 4,
+      "happenedPositions": [3, 6, 9, 12],
+      "expected": { "longestRun": 4, "completedLineCount": 1, "matchedTileCount": 5 }
+    },
+    {
+      "name": "5 by 5 center row",
+      "boardSize": 5,
+      "happenedPositions": [10, 11, 13, 14],
+      "expected": { "longestRun": 5, "completedLineCount": 1, "matchedTileCount": 5 }
+    },
+    {
+      "name": "5 by 5 center column",
+      "boardSize": 5,
+      "happenedPositions": [2, 7, 17, 22],
+      "expected": { "longestRun": 5, "completedLineCount": 1, "matchedTileCount": 5 }
+    },
+    {
+      "name": "5 by 5 primary diagonal",
+      "boardSize": 5,
+      "happenedPositions": [0, 6, 18, 24],
+      "expected": { "longestRun": 5, "completedLineCount": 1, "matchedTileCount": 5 }
+    },
+    {
+      "name": "5 by 5 anti-diagonal",
+      "boardSize": 5,
+      "happenedPositions": [4, 8, 16, 20],
+      "expected": { "longestRun": 5, "completedLineCount": 1, "matchedTileCount": 5 }
+    },
+    {
+      "name": "completed 3 by 3 row",
+      "boardSize": 3,
+      "happenedPositions": [0, 1, 2],
+      "expected": { "longestRun": 3, "completedLineCount": 1, "matchedTileCount": 4 }
+    },
+    {
+      "name": "completed 4 by 4 column",
+      "boardSize": 4,
+      "happenedPositions": [1, 5, 9, 13],
+      "expected": { "longestRun": 4, "completedLineCount": 1, "matchedTileCount": 5 }
+    },
+    {
+      "name": "completed 5 by 5 primary diagonal",
+      "boardSize": 5,
+      "happenedPositions": [0, 6, 18, 24],
+      "expected": { "longestRun": 5, "completedLineCount": 1, "matchedTileCount": 5 }
+    },
+    {
+      "name": "completed 5 by 5 anti-diagonal",
+      "boardSize": 5,
+      "happenedPositions": [4, 8, 16, 20],
+      "expected": { "longestRun": 5, "completedLineCount": 1, "matchedTileCount": 5 }
+    },
+    {
+      "name": "red tiles interrupt a run",
+      "boardSize": 5,
+      "happenedPositions": [0, 1, 3, 4],
+      "expected": { "longestRun": 2, "completedLineCount": 0, "matchedTileCount": 5 }
+    },
+    {
+      "name": "pending and empty positions do not match",
+      "boardSize": 3,
+      "happenedPositions": [0, 1],
+      "pendingPositions": [2],
+      "emptyPositions": [3],
+      "expected": { "longestRun": 2, "completedLineCount": 0, "matchedTileCount": 3 }
+    },
+    {
+      "name": "missing item outcomes do not match and produce a warning",
+      "boardSize": 3,
+      "happenedPositions": [0],
+      "missingOutcomePositions": [8],
+      "expectedWarningCodes": ["missing_outcome"],
+      "expected": { "longestRun": 2, "completedLineCount": 0, "matchedTileCount": 2 }
+    }
+  ],
+  "rankCases": [
+    {
+      "name": "shared ranks use competition ranking and stable display order",
+      "scores": [
+        { "boardCode": "ZZZZ", "playerName": "Lee", "longestRun": 2, "completedLineCount": 0, "matchedTileCount": 7 },
+        { "boardCode": "BBBB", "playerName": "Sam", "longestRun": 3, "completedLineCount": 1, "matchedTileCount": 6 },
+        { "boardCode": "AAAA", "playerName": "Ada", "longestRun": 3, "completedLineCount": 2, "matchedTileCount": 7 },
+        { "boardCode": "CCCC", "playerName": "Chris", "longestRun": 3, "completedLineCount": 1, "matchedTileCount": 6 }
+      ],
+      "expected": [
+        { "boardCode": "AAAA", "rank": 1 },
+        { "boardCode": "CCCC", "rank": 2 },
+        { "boardCode": "BBBB", "rank": 2 },
+        { "boardCode": "ZZZZ", "rank": 4 }
+      ]
+    }
+  ]
+}

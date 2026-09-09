@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import Background from "./components/background";
 import Footer from "./components/footer";
 import { motion, AnimatePresence } from "framer-motion";
@@ -56,10 +57,13 @@ export default function Home() {
               animate={{ opacity: 1, y: 0 }}
               className="flex justify-center items-center mb-20"
             >
-              <img
+              <Image
                 src="/logo.png"
                 alt="App Logo"
-                className="h-25 object-contain"
+                width={320}
+                height={128}
+                priority
+                className="h-auto w-full max-w-80 object-contain"
               />
             </motion.div>
 

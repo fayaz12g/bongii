@@ -11,7 +11,7 @@ This runbook covers the Phase 0 configuration, SQLite migrations, backup checks,
 | `PORT` | No | `3000` | HTTP listen port |
 | `DATABASE_PATH` | No | `./data/bongii.db` | SQLite file; Fly explicitly retains `/data/test.db` for existing production data |
 | `JWT_SECRET` | Yes | Generated secret | Signs temporary local-auth tokens |
-| `CLIENT_ORIGINS` | No | `http://localhost:3001` | Comma-separated browser origins allowed by CORS |
+| `CLIENT_ORIGINS` | No | `http://localhost:3001,https://bongii.fayaz.one,https://bongii-git-feature-account.vercel.app` | Exact comma-separated browser origins allowed by REST and Socket.IO CORS |
 
 Set the production JWT secret with Fly secrets, never in `fly.toml`:
 
@@ -20,6 +20,8 @@ fly secrets set JWT_SECRET="$(openssl rand -hex 32)" -a bongii
 ```
 
 Changing this value signs every user out. The Firebase migration will eventually remove it.
+
+`CLIENT_ORIGINS` accepts origins only: scheme, hostname, and optional non-default port. Wildcards, paths, and trailing slashes fail startup validation. Keep `http://localhost:3001` for local development, list the production Vercel/custom domain, and add the exact `https://${VERCEL_URL}` value for each active Vercel preview deployment. Remove stale preview origins after testing.
 
 ### Client
 
@@ -90,6 +92,9 @@ Run the same gates as CI:
 ```bash
 npm --prefix server test
 npm --prefix server audit --omit=dev --audit-level=high
+npm --prefix client test
+npx --prefix client playwright install chromium
+npm --prefix client run test:a11y
 npm --prefix client run lint
 NEXT_PUBLIC_API_BASE_URL=http://localhost:3000 npm --prefix client run build
 npm --prefix client audit --omit=dev --audit-level=high

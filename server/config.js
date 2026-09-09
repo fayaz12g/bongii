@@ -17,6 +17,15 @@ const parseOrigins = (value) => (value || 'http://localhost:3001')
   .map((origin) => origin.trim())
   .filter(Boolean);
 
+const isExactHttpOrigin = (origin) => {
+  try {
+    const parsed = new URL(origin);
+    return ['http:', 'https:'].includes(parsed.protocol) && parsed.origin === origin;
+  } catch {
+    return false;
+  }
+};
+
 const config = {
   nodeEnv: process.env.NODE_ENV || 'development',
   port: parsePort(process.env.PORT),
@@ -29,6 +38,12 @@ config.validate = () => {
   if (!config.jwtSecret) {
     throw new Error('JWT_SECRET is required');
   }
+  if (config.allowedOrigins.length === 0
+    || config.allowedOrigins.some((origin) => !isExactHttpOrigin(origin))) {
+    throw new Error('CLIENT_ORIGINS must contain exact HTTP(S) origins without paths or wildcards');
+  }
 };
 
 module.exports = config;
+module.exports.isExactHttpOrigin = isExactHttpOrigin;
+module.exports.parseOrigins = parseOrigins;

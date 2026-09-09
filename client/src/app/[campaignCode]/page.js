@@ -1,6 +1,6 @@
 "use client";
 import { campaignService } from "../services/campaignService";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, Users, Eye, Clock, Check, X, Trash2, Play, Shuffle, User, Trophy } from "lucide-react";
@@ -39,6 +39,8 @@ export default function CampaignPage() {
   const [playerName, setPlayerName] = useState("");
   const [draggedItem, setDraggedItem] = useState(null);
   const [hoveredCell, setHoveredCell] = useState(null);
+  const [submissionError, setSubmissionError] = useState("");
+  const boardCellRefs = useRef([]);
   const { setSelectedPreset } = useBackground();
 
   useEffect(() => {
@@ -250,7 +252,7 @@ const renderMiniBoard = (boardData, boardSize) => {
 
   const handleDragStart = (e, index) => {
     if (campaign.status !== "open") return;
-    if (board[index]) {
+    if (board[index] && !board[index].isCenter) {
       setDraggedItem({ item: board[index], fromIndex: index });
       e.dataTransfer.effectAllowed = 'move';
     }
@@ -272,7 +274,7 @@ const renderMiniBoard = (boardData, boardSize) => {
     if (campaign.status !== "open") return;
     setHoveredCell(null);
 
-    if (draggedItem && toIndex !== draggedItem.fromIndex) {
+    if (draggedItem && toIndex !== draggedItem.fromIndex && !board[toIndex]?.isCenter) {
       const newBoard = [...board];
 
       // Swap dragged item with target cell, even if target is null
@@ -283,6 +285,33 @@ const renderMiniBoard = (boardData, boardSize) => {
     }
 
     setDraggedItem(null);
+  };
+
+  const handleBoardCellKeyDown = (event, index) => {
+    if (campaign.status !== "open") return;
+    if ((event.key === "Enter" || event.key === " ") && !board[index]) {
+      event.preventDefault();
+      handleBoardCellClick(index);
+      return;
+    }
+    const offsets = {
+      ArrowLeft: -1,
+      ArrowRight: 1,
+      ArrowUp: -campaign.boardSize,
+      ArrowDown: campaign.boardSize,
+    };
+    const offset = offsets[event.key];
+    if (!offset || !board[index] || board[index].isCenter) return;
+    const target = index + offset;
+    const sameRow = Math.floor(index / campaign.boardSize) === Math.floor(target / campaign.boardSize);
+    if (target < 0 || target >= board.length
+      || ((event.key === "ArrowLeft" || event.key === "ArrowRight") && !sameRow)
+      || board[target]?.isCenter) return;
+    event.preventDefault();
+    const nextBoard = [...board];
+    [nextBoard[index], nextBoard[target]] = [nextBoard[target], nextBoard[index]];
+    setBoard(nextBoard);
+    requestAnimationFrame(() => boardCellRefs.current[target]?.focus());
   };
 
   const isItemSelected = (category, item) => {
@@ -321,7 +350,8 @@ const canFinalize = () => {
 
   const handleFinalize = async () => {
     if (!canFinalize()) return;
-    
+
+    setSubmissionError("");
     setFinalizing(true);
     try {
       // Map the board to the format server expects
@@ -348,11 +378,11 @@ const canFinalize = () => {
         router.push(`/boards/${data.boardCode}`);
       } else {
         const data = await response.json();
-        alert(data.error || "Error creating board. Please try again.");
+        setSubmissionError(data.error || "Error creating board. Please try again.");
       }
     } catch (error) {
       console.error("Error finalizing board:", error);
-      alert("Error creating board. Please try again.");
+      setSubmissionError("Error creating board. Please try again.");
     } finally {
       setFinalizing(false);
     }
@@ -369,7 +399,8 @@ const canFinalize = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 flex items-center justify-center">
+      <div className="app-page flex items-center justify-center">
+        <Background />
         <div className="text-center">
           <div className="animate-spin rounded-full h-16 w-16 border-t-2 border-white mx-auto mb-4"></div>
           <p className="text-white text-xl">Loading campaign...</p>
@@ -380,14 +411,15 @@ const canFinalize = () => {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-red-900 via-purple-900 to-indigo-900 flex items-center justify-center px-6">
+      <div className="app-page flex items-center justify-center px-6">
+        <Background />
         <div className="text-center max-w-md">
-          <div className="bg-black/30 backdrop-blur-sm rounded-3xl p-8 border-2 border-red-400/30">
+          <div className="app-panel p-8">
             <h1 className="text-3xl font-bold text-red-400 mb-4">Error</h1>
             <p className="text-white mb-6">{error}</p>
             <button
               onClick={() => router.push("/browse")}
-              className="flex items-center justify-center mx-auto text-white bg-red-500/20 hover:bg-red-500/30 px-6 py-3 rounded-xl border-2 border-red-400 hover:border-red-300 transition-all"
+              className="ui-button-danger mx-auto"
             >
               <ArrowLeft className="w-5 h-5 mr-2" />
               Back
@@ -405,34 +437,34 @@ const canFinalize = () => {
   };
 
   return (
-    <div className={`min-h-screen`}>
+    <div className="app-page">
       <Header />
       <br /> <br /> <br />
       <Background />
       <div className="container mx-auto px-6 py-8">
-        <div className="flex justify-between items-center mb-8">
+        <div className="mb-8 grid gap-5 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-start">
           <button
             onClick={() => router.push("/browse")}
-            className="flex items-center text-white bg-white/10 hover:bg-white/20 px-4 py-2 rounded-xl border-2 border-white/30 hover:border-white/50 transition-all"
+            className="ui-button-secondary justify-self-start"
           >
             <ArrowLeft className="w-5 h-5 mr-2" />
             <span className="font-medium">Back</span>
           </button>
           
-          <div className="text-center">
-            <h1 className="text-3xl font-bold text-white mb-1">{campaign.title}</h1>
+          <div className="min-w-0 text-left sm:text-center">
+            <h1 className="break-words text-3xl font-bold text-white mb-1">{campaign.title}</h1>
             <p className="text-white/70">Code: {campaignCode}</p>
             <span className="mt-2 inline-block rounded-md border border-white/30 bg-black/20 px-2.5 py-1 text-sm font-semibold text-white">
               {status.label}
             </span>
           </div>
           
-          <div className="text-right text-white">
-            <div className="flex items-center justify-end mb-1">
+          <div className="text-left text-white sm:text-right">
+            <div className="mb-1 flex items-center sm:justify-end">
               <Trophy className="w-4 h-4 mr-1" />
               <span className="text-sm">Goal: {getGoal(campaign.boardSize)}</span>
             </div>
-            <div className="flex items-center justify-end">
+            <div className="flex items-center sm:justify-end">
               <Users className="w-4 h-4 mr-1" />
               <span className="text-sm">{campaign.playerCount || 0} players</span>
             </div>
@@ -450,7 +482,7 @@ const canFinalize = () => {
         <div className="grid lg:grid-cols-6 gap-8">
           {/* Categories Panel */}
           <div className="lg:col-span-2">
-            <div className="bg-black/30 backdrop-blur-sm rounded-3xl p-6 border-2 border-white/20 shadow-2xl sticky top-8">
+            <div className="app-panel sticky top-24 p-6">
               <h2 className="text-xl font-bold text-white mb-4">Categories</h2>
 
               <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
@@ -464,7 +496,7 @@ const canFinalize = () => {
                       <h3 className="text-white font-semibold text-sm flex items-center">
                         {category.name}
                         {category.required && (
-                          <span className="ml-2 text-xs bg-red-500 text-white px-2 py-0.5 rounded">
+                          <span className="ml-2 rounded bg-red-800 px-2 py-0.5 text-xs text-white">
                             Required
                           </span>
                         )}
@@ -503,7 +535,7 @@ const canFinalize = () => {
 
           {/* Main Content */}
           <div className="lg:col-span-3">
-            <div className="bg-black/30 backdrop-blur-sm rounded-3xl p-8 border-2 border-white/20 shadow-2xl">
+            <div className="app-panel p-5 sm:p-8">
               {/* Player Name Input */}
               <div className="mb-6">
                 <label className="block text-white font-semibold mb-2">Your Name</label>
@@ -513,7 +545,7 @@ const canFinalize = () => {
                   onChange={(e) => setPlayerName(e.target.value)}
                   disabled={!isOpen}
                   placeholder="Enter your name..."
-                  className="w-full px-4 py-3 rounded-xl bg-white/10 text-white placeholder-gray-300 border-2 border-white/30 focus:border-blue-400 focus:ring-2 focus:ring-blue-500 transition-all"
+                  className="ui-field"
                 />
               </div>
 
@@ -526,68 +558,97 @@ const canFinalize = () => {
                     gridTemplateColumns: `repeat(${campaign.boardSize}, 1fr)`,
                     maxWidth: `${campaign.boardSize * 120}px`
                   }}
+                  role="grid"
+                  aria-label="Board layout"
+                  aria-describedby="board-keyboard-help"
                 >
-                  {board.map((cell, index) => (
-                    <div
-                      key={index}
-                      className={`aspect-square border-2 rounded-xl flex items-center justify-center p-2 text-center transition-all ${
-                        isOpen ? "cursor-pointer" : "cursor-default"
-                      } ${
-                        cell
-                          ? cell.isCenter
-                            ? "bg-yellow-500/30 border-yellow-400 text-yellow-100"
-                            : "bg-green-500/30 border-green-400 text-green-100 hover:bg-green-500/40"
-                          : hoveredCell === index
-                            ? "bg-blue-500/30 border-blue-400"
-                            : "bg-white/10 border-white/30 hover:bg-white/20"
-                      }`}
-                      onClick={() => cell ? null : handleBoardCellClick(index)}
-                      onDragStart={(e) => handleDragStart(e, index)}
-                      onDragOver={(e) => handleDragOver(e, index)}
-                      onDragLeave={handleDragLeave}
-                      onDrop={(e) => handleDrop(e, index)}
-                      draggable={isOpen && !!cell}
-                    >
-                      {cell ? (
-                        <div className="relative w-full h-full flex items-center justify-center group">
-                          {cell.isCenter ? (
-                            <div className="text-center">
-                              <User className="w-6 h-6 mx-auto mb-1" />
-                              <input
-                                type="text"
-                                value={playerName}
-                                onChange={(e) => {
-                                  setPlayerName(e.target.value);
-                                  updatePlayerName(index, e.target.value);
-                                }}
-                                disabled={!isOpen}
-                                placeholder="Your Name"
-                                className="bg-transparent text-center text-xs w-full text-yellow-100 placeholder-yellow-200/50"
-                              />
-                            </div>
-                          ) : (
-                            <>
-                              <span className="text-xs font-medium break-words">{cell.text || cell.name}</span>
-                              {isOpen && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleRemoveFromBoard(index);
-                                  }}
-                                  className="absolute -top-1 -right-1 bg-red-500 hover:bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                                >
-                                  <X className="w-3 h-3" />
-                                </button>
+                  {Array.from({ length: campaign.boardSize }, (_, rowIndex) => (
+                    <div key={rowIndex} role="row" className="contents">
+                      {board
+                        .slice(rowIndex * campaign.boardSize, (rowIndex + 1) * campaign.boardSize)
+                        .map((cell, columnIndex) => {
+                          const index = rowIndex * campaign.boardSize + columnIndex;
+                          return (
+                            <div
+                              key={index}
+                              ref={(element) => { boardCellRefs.current[index] = element; }}
+                              role="gridcell"
+                              tabIndex={isOpen && !cell?.isCenter ? 0 : undefined}
+                              aria-label={cell
+                                ? `${cell.text || cell.name}${cell.isCenter ? ", fixed center tile" : ", use arrow keys to move"}`
+                                : "Empty board position"}
+                              aria-keyshortcuts={isOpen && !cell?.isCenter
+                                ? "ArrowLeft ArrowRight ArrowUp ArrowDown Enter Space"
+                                : undefined}
+                              className={`aspect-square border-2 rounded-xl flex items-center justify-center p-2 text-center transition-all ${
+                                isOpen && !cell?.isCenter ? "cursor-pointer" : "cursor-default"
+                              } ${
+                                cell
+                                  ? cell.isCenter
+                                    ? "bg-yellow-500/30 border-yellow-400 text-yellow-100"
+                                    : "bg-green-500/30 border-green-400 text-green-100 hover:bg-green-500/40"
+                                  : hoveredCell === index
+                                    ? "bg-blue-500/30 border-blue-400"
+                                    : "bg-white/10 border-white/30 hover:bg-white/20"
+                              }`}
+                              onClick={() => cell ? null : handleBoardCellClick(index)}
+                              onKeyDown={(event) => handleBoardCellKeyDown(event, index)}
+                              onDragStart={(e) => handleDragStart(e, index)}
+                              onDragOver={(e) => handleDragOver(e, index)}
+                              onDragLeave={handleDragLeave}
+                              onDrop={(e) => handleDrop(e, index)}
+                              draggable={isOpen && !!cell && !cell.isCenter}
+                            >
+                              {cell ? (
+                                <div className="relative w-full h-full flex items-center justify-center group">
+                                  {cell.isCenter ? (
+                                    <div className="text-center">
+                                      <User className="w-6 h-6 mx-auto mb-1" />
+                                      <input
+                                        type="text"
+                                        value={playerName}
+                                        onChange={(e) => {
+                                          setPlayerName(e.target.value);
+                                          updatePlayerName(index, e.target.value);
+                                        }}
+                                        disabled={!isOpen}
+                                        aria-label="Player name in center tile"
+                                        placeholder="Your Name"
+                                        className="min-h-6 w-full bg-transparent px-1 text-center text-xs text-yellow-100 placeholder-yellow-200/70"
+                                      />
+                                    </div>
+                                  ) : (
+                                    <>
+                                      <span className="text-xs font-medium break-words">{cell.text || cell.name}</span>
+                                      {isOpen && (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleRemoveFromBoard(index);
+                                          }}
+                                          className="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-700 text-white opacity-0 transition-opacity hover:bg-red-800 focus:opacity-100 group-focus-within:opacity-100 group-hover:opacity-100"
+                                          aria-label={`Remove ${cell.text || cell.name} from board`}
+                                          title="Remove tile"
+                                        >
+                                          <X className="w-3 h-3" />
+                                        </button>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
+                              ) : (
+                                <div className="text-xs text-muted">Empty</div>
                               )}
-                            </>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="text-white/50 text-xs">Empty</div>
-                      )}
+                            </div>
+                          );
+                        })}
                     </div>
                   ))}
                 </div>
+                <p id="board-keyboard-help" className="sr-only">
+                  Select category items, then use Enter or Space on an empty position to place a selected tile. Use arrow keys on a tile to move it.
+                </p>
               </div>
 
               {isOpen && (
@@ -599,6 +660,12 @@ const canFinalize = () => {
                 </div>
               )}
 
+              {submissionError && (
+                <p role="alert" className="ui-toast mb-6 border-rose-400 text-rose-100">
+                  {submissionError}
+                </p>
+              )}
+
               {/* Finalize Button */}
               <div className="flex justify-center">
                 <motion.button
@@ -606,11 +673,7 @@ const canFinalize = () => {
                   whileTap={{ scale: canFinalize() ? 0.97 : 1 }}
                   onClick={handleFinalize}
                   disabled={!canFinalize() || finalizing}
-                  className={`px-8 py-4 rounded-xl font-semibold border-2 transition-all ${
-                    canFinalize()
-                      ? "bg-gradient-to-r from-green-500 to-green-600 text-white border-white/30 hover:border-white/50"
-                      : "bg-gray-500/30 text-gray-300 border-gray-500/30 cursor-not-allowed"
-                  }`}
+                  className="ui-button-primary px-8 py-4"
                 >
                   {!isOpen ? (
                     "Board creation closed"
@@ -640,7 +703,7 @@ const canFinalize = () => {
           </div>
          {/* Existing Boards Panel */}
           <div className="lg:col-span-1">
-            <div className="bg-black/30 backdrop-blur-sm rounded-3xl p-6 border-2 border-white/20 shadow-2xl sticky top-8">
+            <div className="app-panel sticky top-24 p-6">
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-xl font-bold text-white">Player Boards</h2>
                 <div className="flex items-center text-white/70">
@@ -665,10 +728,11 @@ const canFinalize = () => {
                   </div>
                 ) : (
                   campaignBoards.map((boardData) => (
-                    <motion.div
+                    <motion.button
+                      type="button"
                       key={boardData.boardCode}
                       whileHover={{ scale: 1.02 }}
-                      className="bg-white/10 hover:bg-white/15 rounded-xl p-4 border border-white/20 hover:border-white/30 cursor-pointer transition-all"
+                      className="w-full rounded-md border border-line bg-panel-strong p-4 text-left transition-colors hover:border-slate-300 hover:bg-slate-700"
                       onClick={() => router.push(`/boards/${boardData.boardCode}`)}
                     >
                       <div className="mb-3">
@@ -693,7 +757,7 @@ const canFinalize = () => {
                           <span>{formatTimeAgo(boardData.createdAt)}</span>
                         </div>
                       </div>
-                    </motion.div>
+                    </motion.button>
                   ))
                 )}
               </div>

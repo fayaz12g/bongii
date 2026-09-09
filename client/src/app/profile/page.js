@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Image from 'next/image';
 import { profileService } from '../services/profileService';
 import Header from '../components/header';
 import dynamic from "next/dynamic";
@@ -20,12 +21,17 @@ export default function ProfilePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [message, setMessage] = useState('');
 
-  const loadUserData = async () => {
-        profileService.getUserData().then(response => {
-            return response.json()
-      })
-        .then(data => {
-        console.log(data)
+  useEffect(() => {
+    let active = true;
+    const loadUserData = async () => {
+      try {
+        const response = await profileService.getUserData();
+        if (!response.ok) {
+          router.push('/login');
+          return;
+        }
+        const data = await response.json();
+        if (!active) return;
         setUserData({
           ...data,
           firstName: data.firstName ?? '',
@@ -34,23 +40,15 @@ export default function ProfilePage() {
           email: data.email ?? '',
           profileIcon: data.profileIcon ?? '1',
         });
-        setIsLoading(false);
-    });
-  };
-
-  useEffect(() => {
-    // Check if the token exists in localStorage
-    const token = localStorage.getItem('token');
-    console.log("Checking access");
-    profileService.getUserData().then(response => {
-        if (!response.ok) {
-          router.push('/login'); // Redirect to home page
-        }
-        else {
-          loadUserData();
-        }
-    });
-  }, []);
+      } catch {
+        if (active) setMessage('Error loading profile');
+      } finally {
+        if (active) setIsLoading(false);
+      }
+    };
+    loadUserData();
+    return () => { active = false; };
+  }, [router]);
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
@@ -83,89 +81,98 @@ export default function ProfilePage() {
   }
 
   return (
-    <div>
+    <div className="app-page">
       <Header />
       <Background />
       {/* <Footer /> */}
       <div className="max-w-6xl mx-auto pt-24 px-4">
-        <div className=" backdrop-blur-md bg-white/20 border-b border-white/40 rounded-2xl shadow-lg p-8 max-w-2xl mx-auto">
+        <div className="app-panel mx-auto max-w-2xl p-6 sm:p-8">
           <h1 className="text-3xl font-bold text-white text-center mb-8">Your Profile</h1>
           
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Profile Icons */}
-            <div className="space-y-2">
-            <label className="block text-white text-lg mb-4">Select Profile Icon</label>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <fieldset className="space-y-2">
+            <legend className="block text-white text-lg mb-4">Select Profile Icon</legend>
+            <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
                 {['1', '2', '3', '4'].map((id) => (
-                <div
+              <button
+                type="button"
                     key={id}
                     onClick={() => handleInputChange({ target: { name: 'profileIcon', value: id } })}
-                    className={`cursor-pointer p-4 rounded-lg border-2 ${
-                    userData.profileIcon === id ? 'border-purple-500' : 'border-gray-600'
+                aria-pressed={userData.profileIcon === id}
+                className={`rounded-md border-2 p-3 ${
+                userData.profileIcon === id ? 'border-focus bg-panel-strong' : 'border-line'
                     }`}
                 >
                     <div className="w-full aspect-square rounded overflow-hidden">
-                    <img 
+                    <Image
                         src={`/icon-${id}.png`}
                         alt={`Profile Icon ${id}`}
+                      width={160}
+                      height={160}
+                        priority={id === '1'}
                         className="w-full h-full object-cover hover:scale-105 transition-transform"
                     />
                     </div>
-                </div>
+                </button>
                 ))}
             </div>
-            </div>
+              </fieldset>
 
             {/* Username Field */}
             <div>
-              <label className="block text-white text-lg mb-2">Username</label>
+              <label htmlFor="profile-username" className="block text-white text-lg mb-2">Username</label>
               <input
+                id="profile-username"
                 type="text"
                 value={userData.username}
                 readOnly
-                className="w-full p-3 rounded bg-gray-600 text-gray-300 border border-gray-600 cursor-not-allowed"
+                className="ui-field cursor-not-allowed opacity-70"
               />
             </div>
 
             {/* First and Last Name Fields */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-white text-lg mb-2">First Name</label>
+                <label htmlFor="profile-first-name" className="block text-white text-lg mb-2">First Name</label>
                 <input
+                  id="profile-first-name"
                   type="text"
                   name="firstName"
                   value={userData.firstName}
                   onChange={handleInputChange}
-                  className="w-full p-3 rounded bg-gray-700 text-white border border-gray-600 focus:border-purple-500 focus:outline-none"
+                  className="ui-field"
                 />
               </div>
               <div>
-                <label className="block text-white text-lg mb-2">Last Name</label>
+                <label htmlFor="profile-last-name" className="block text-white text-lg mb-2">Last Name</label>
                 <input
+                  id="profile-last-name"
                   type="text"
                   name="lastName"
                   value={userData.lastName}
                   onChange={handleInputChange}
-                  className="w-full p-3 rounded bg-gray-700 text-white border border-gray-600 focus:border-purple-500 focus:outline-none"
+                  className="ui-field"
                 />
               </div>
             </div>
 
             {/* Email Field */}
             <div>
-              <label className="block text-white text-lg mb-2">Email</label>
+              <label htmlFor="profile-email" className="block text-white text-lg mb-2">Email</label>
               <input
+                id="profile-email"
                 type="email"
                 name="email"
                 value={userData.email}
                 onChange={handleInputChange}
-                className="w-full p-3 rounded bg-gray-700 text-white border border-gray-600 focus:border-purple-500 focus:outline-none"
+                className="ui-field"
               />
             </div>
 
             {/* Message Display */}
             {message && (
-              <div className={`text-center p-3 rounded ${
+              <div role="status" className={`ui-toast text-center ${
                 message.includes('Error') ? 'bg-red-500/20 text-red-300' : 'bg-green-500/20 text-green-300'
               }`}>
                 {message}
@@ -176,7 +183,7 @@ export default function ProfilePage() {
             <div className="flex justify-center">
               <button
                 type="submit"
-                className="bg-purple-500 hover:bg-purple-600 text-white font-bold py-3 px-8 rounded-lg transition-colors"
+                className="ui-button-primary"
               >
                 Save Changes
               </button>

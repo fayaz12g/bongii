@@ -9,7 +9,7 @@ primary_region = 'atl'
 [build]
 
 [env]
-  CLIENT_ORIGINS = "https://bongii.fayaz.one"
+  CLIENT_ORIGINS = "https://bongii.fayaz.one,https://bongii.net,https://www.bongii.net"
   DATABASE_PATH = "/data/test.db"
 
 [mounts]

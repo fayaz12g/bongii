@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { Menu, X } from 'lucide-react';
 import { profileService } from '../services/profileService';
+import { useBackground } from './context';
 
 const menuItemsBase = [
   { name: "Home", path: "/home" },
   { name: "Boards", path: "/boards" },
   { name: "Campaigns", path: "/browse" },
+  { name: "Leaderboards", path: "/leaderboards" },
   { name: "Profile", path: "/profile" },
 ];
 
@@ -17,6 +20,7 @@ const Header = () => {
   const [loggedIn, setLoggedIn] = useState(false);
   const pathname = usePathname();
   const router = useRouter(); 
+  const { reduceMotion, setReduceMotion } = useBackground();
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -56,17 +60,17 @@ const menuItems = [
 
   return (
     <>
-      <nav className="fixed w-full z-40 backdrop-blur-md bg-white/20 border-b border-white/40">
+      <nav className="fixed w-full z-40 border-b border-line bg-[#10161d]/95" aria-label="Primary navigation">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
             <motion.div
-              initial={{ opacity: 0, x: -20 }}
+              initial={reduceMotion ? false : { opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               className="text-white font-bold text-xl"
             >
               <Link href="/">
                 <span className="block lg:inline">
-                  <img src="/logo.png" alt="BONGII Logo" className="inline-block mr-2" style={{ width: '6em', height: '2em' }} />
+                  <Image src="/logo.png" alt="BONGII Logo" width={96} height={32} loading="eager" className="inline-block mr-2 h-8 w-24 object-contain" />
                   {/* BONGII */}
                 </span>
               </Link>
@@ -74,16 +78,16 @@ const menuItems = [
 
             {/* Desktop Menu */}
             <motion.div 
-              initial={{ opacity: 0, x: 20 }}
+              initial={reduceMotion ? false : { opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
-              className="hidden lg:flex space-x-8"
+              className="hidden lg:flex items-center gap-5"
             >
               {menuItems.map((item) => (
                 item.action ? (
                   <button
                     key={item.name}
                     onClick={item.action} 
-                    className="text-gray-300 hover:text-white transition-colors"
+                    className="text-muted hover:text-white transition-colors"
                   >
                     {item.name}
                   </button>
@@ -91,17 +95,35 @@ const menuItems = [
                   <Link
                     key={item.name}
                     href={item.path}
-                    className={`text-gray-300 hover:text-white transition-colors ${pathname === item.path ? 'text-white' : ''}`}
+                    className={`text-muted hover:text-white transition-colors ${pathname === item.path || pathname.startsWith(`${item.path}/`) ? 'text-white' : ''}`}
                   >
                     {item.name}
                   </Link>
                 )
               ))}
+              <button
+                type="button"
+                role="switch"
+                aria-checked={reduceMotion}
+                onClick={() => setReduceMotion(!reduceMotion)}
+                className="flex items-center gap-2 text-sm font-medium text-muted hover:text-white"
+              >
+                <span>Reduce motion</span>
+                <span className={`relative h-6 w-11 rounded-full border transition-colors ${reduceMotion ? "border-focus bg-focus" : "border-line bg-panel-strong"}`} aria-hidden="true">
+                  <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${reduceMotion ? "translate-x-5" : "translate-x-1"}`} />
+                </span>
+              </button>
             </motion.div>
 
             {/* Mobile Menu Button */}
             <div className="lg:hidden">
-              <button onClick={toggleMenu} className="text-gray-300 hover:text-white p-2">
+              <button
+                type="button"
+                onClick={toggleMenu}
+                className="p-2 text-muted hover:text-white"
+                aria-label="Open navigation menu"
+                aria-expanded={isOpen}
+              >
                 <Menu size={24} />
               </button>
             </div>
@@ -125,6 +147,7 @@ const menuItems = [
               exit={{ opacity: 0, scale: 0.8 }}
               onClick={toggleMenu}
               className="fixed top-6 right-6 z-50 p-2 text-white hover:text-gray-300 transition-colors cursor-pointer"
+              aria-label="Close navigation menu"
             >
               <X size={32} />
             </motion.button>
@@ -136,7 +159,7 @@ const menuItems = [
               className="fixed inset-0 z-45 flex flex-col items-center justify-center space-y-12 pointer-events-auto"
             >
               {menuItems.map((item, index) => {
-                const isActive = pathname === item.path;
+                const isActive = pathname === item.path || pathname.startsWith(`${item.path}/`);
                 return (
                   <motion.div
                     key={item.name}
@@ -165,6 +188,18 @@ const menuItems = [
                   </motion.div>
                 );
               })}
+              <button
+                type="button"
+                role="switch"
+                aria-checked={reduceMotion}
+                onClick={() => setReduceMotion(!reduceMotion)}
+                className="flex items-center gap-3 text-xl font-medium text-white"
+              >
+                <span>Reduce motion</span>
+                <span className={`relative h-7 w-12 rounded-full border transition-colors ${reduceMotion ? "border-focus bg-focus" : "border-line bg-panel-strong"}`} aria-hidden="true">
+                  <span className={`absolute top-1 h-4 w-4 rounded-full bg-white transition-transform ${reduceMotion ? "translate-x-6" : "translate-x-1"}`} />
+                </span>
+              </button>
             </motion.div>
           </div>
         )}

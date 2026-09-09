@@ -72,9 +72,8 @@ const schemas = {
       customText: z.string().trim().max(200).nullable().optional(),
     })).min(1).max(25),
   }),
-  callItem: z.object({
-    itemId: z.number().int().positive(),
-    status: z.enum(['correct', 'incorrect']),
+  itemOutcome: z.object({
+    status: z.enum(['pending', 'happened', 'did_not_happen']),
   }),
 };
 

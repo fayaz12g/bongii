@@ -108,41 +108,43 @@ Priority: `P1`
 
 Goal: one moderator decision updates every relevant board without player marking.
 
+Status: completed locally on 2026-09-09. Production backup, migration `003_item_outcomes.js`, deployment, and hosted CI remain release checks.
+
 ### Outcome model and API
 
-- [ ] Replace ambiguous item statuses with `pending`, `happened`, and `did_not_happen`.
-- [ ] Record `decidedAt` and `decidedBy` for each change.
-- [ ] Add an owner-only item outcome endpoint that verifies the item belongs to the campaign.
-- [ ] Permit reverting to pending only before completion.
-- [ ] Return tile outcomes in board snapshots.
+- [x] Replace ambiguous item statuses with `pending`, `happened`, and `did_not_happen`.
+- [x] Record `decidedAt` and `decidedBy` for each change.
+- [x] Add an owner-only item outcome endpoint that verifies the item belongs to the campaign.
+- [x] Permit reverting to pending only before completion.
+- [x] Return tile outcomes in board snapshots.
 
 ### Socket.IO transport
 
-- [ ] Wrap Express in an HTTP server and add Socket.IO to server and client packages.
-- [ ] Join viewers to a room scoped by campaign code.
-- [ ] Emit versioned status, outcome, and snapshot-invalidated events only after a database commit.
-- [ ] Add exact-origin CORS rules for Vercel production, preview, and local development.
-- [ ] Refetch the authoritative snapshot after reconnect, version gaps, or malformed events.
-- [ ] Add connection-state telemetry without logging tokens or private fields.
+- [x] Wrap Express in an HTTP server and add Socket.IO to server and client packages.
+- [x] Join viewers to a room scoped by campaign code.
+- [x] Emit versioned status, outcome, and snapshot-invalidated events only after a database commit.
+- [x] Add exact-origin CORS rules for Vercel production, preview, and local development.
+- [x] Refetch the authoritative snapshot after reconnect, version gaps, or malformed events.
+- [x] Add connection-state telemetry without logging tokens or private fields.
 
 ### Moderator and board interfaces
 
-- [ ] Add import JSON when creating a campaign and example JSON download to
+- [x] Add import JSON when creating a campaign and example JSON download to
   allow for AI generated campaigns (which import and can be modified before posting)
-- [ ] Build compact three-state item controls grouped by category.
-- [ ] Show pending and decided counts plus save, retry, and reconnect states.
-- [ ] Remove player tile click handlers and local `marks` state.
-- [ ] Derive green, red, and neutral board tiles from server outcomes.
-- [ ] Pair color with check, X, and pending icons plus accessible labels.
-- [ ] Animate only the tile whose outcome changed and disable that animation for reduced motion.
+- [x] Build compact three-state item controls grouped by category.
+- [x] Show pending and decided counts plus save, retry, and reconnect states.
+- [x] Remove player tile click handlers and local `marks` state.
+- [x] Derive green, red, and neutral board tiles from server outcomes.
+- [x] Pair color with check, X, and pending icons plus accessible labels.
+- [x] Animate only the tile whose outcome changed and disable that animation for reduced motion.
 
 ### Acceptance checks
 
-- [ ] A moderator update appears on two open board clients without refresh.
-- [ ] Only boards containing the changed item alter a tile.
-- [ ] Refreshing or reconnecting reproduces the same state.
-- [ ] An unauthorized socket or REST client cannot mutate outcomes.
-- [ ] A stale event cannot overwrite a newer campaign version.
+- [x] A moderator update appears on two open board clients without refresh.
+- [x] Only boards containing the changed item alter a tile.
+- [x] Refreshing or reconnecting reproduces the same state.
+- [x] An unauthorized socket or REST client cannot mutate outcomes.
+- [x] A stale event cannot overwrite a newer campaign version.
 
 ## Phase 3: Finalization, scoring, and leaderboard
 
@@ -150,39 +152,41 @@ Priority: `P1`
 
 Goal: finish a campaign atomically and publish deterministic results.
 
+Status: completed locally on 2026-09-09. Production backup, migration `004_result_snapshots.js`, deployment, and hosted CI remain release checks.
+
 ### Scoring engine
 
-- [ ] Implement scoring as a pure server module with no database calls.
-- [ ] Cover 3 by 3, 4 by 4, and 5 by 5 rows, columns, and diagonals.
-- [ ] Count the center as a free happened tile and exclude empty cells.
-- [ ] Calculate longest contiguous run, completed line count, and matched tile count.
-- [ ] Assign shared ranks for equal score tuples.
-- [ ] Add a `rulesVersion` constant and fixture-based unit tests.
+- [x] Implement scoring as a pure server module with no database calls.
+- [x] Cover 3 by 3, 4 by 4, and 5 by 5 rows, columns, and diagonals.
+- [x] Count the center as a free happened tile and exclude empty cells.
+- [x] Calculate longest contiguous run, completed line count, and matched tile count.
+- [x] Assign shared ranks for equal score tuples.
+- [x] Add a `rulesVersion` constant and fixture-based unit tests.
 
 ### Finalization and result storage
 
-- [ ] Add campaign and board result snapshot tables.
-- [ ] Implement one `BEGIN IMMEDIATE` transaction that resolves pending items as did not happen, scores all boards, stores ranks, and completes the campaign.
-- [ ] Make finalization idempotent.
-- [ ] Block all outcome writes after completion.
-- [ ] Emit the completed event only after commit.
-- [ ] Add a public, paginated campaign results endpoint.
+- [x] Add campaign and board result snapshot tables.
+- [x] Implement one `BEGIN IMMEDIATE` transaction that resolves pending items as did not happen, scores all boards, stores ranks, and completes the campaign.
+- [x] Make finalization idempotent.
+- [x] Block all outcome writes after completion.
+- [x] Emit the completed event only after commit.
+- [x] Add a public, paginated campaign results endpoint.
 
 ### Leaderboard UI
 
-- [ ] Add `/leaderboards` for campaign discovery and `/leaderboards/[campaignCode]` for results.
-- [ ] Show rank, player, longest run, completed lines, total matches, and a board preview.
-- [ ] Link each result to its read-only board.
-- [ ] Show shared ranks correctly and explain the scoring order.
-- [ ] Add a finalization confirmation that states how many pending items will become red.
+- [x] Add `/leaderboards` for campaign discovery and `/leaderboards/[campaignCode]` for results.
+- [x] Show rank, player, longest run, completed lines, total matches, and a board preview.
+- [x] Link each result to its read-only board.
+- [x] Show shared ranks correctly and explain the scoring order.
+- [x] Add a finalization confirmation that states how many pending items will become red.
 
 ### Acceptance checks
 
-- [ ] The same finalized data produces byte-for-byte equivalent score values on repeated reads.
-- [ ] Concurrent finalization requests create one result snapshot.
-- [ ] Pending items are red on every board after finalization.
-- [ ] Ties share rank and the next rank follows competition ranking.
-- [ ] A completed campaign survives API restart with the same leaderboard.
+- [x] The same finalized data produces byte-for-byte equivalent score values on repeated reads.
+- [x] Concurrent finalization requests create one result snapshot.
+- [x] Pending items are red on every board after finalization.
+- [x] Ties share rank and the next rank follows competition ranking.
+- [x] A completed campaign survives API restart with the same leaderboard.
 
 ## Phase 4: Browse model and visual cleanup
 
@@ -190,34 +194,37 @@ Priority: `P1`
 
 Goal: make campaign state obvious and the application comfortable to read while keeping its game identity.
 
+Status: completed locally on 2026-09-09. Hosted CI and a hands-on VoiceOver/NVDA smoke check remain release checks; local Axe, accessibility-tree, keyboard, viewport, test, lint, build, and audit gates pass.
+
 ### Browse and navigation
 
-- [ ] Add Open, Awaiting results, and Results tabs backed by server query filters.
-- [ ] Add title search, board count, board size, status, relevant date, and one contextual action per campaign.
-- [ ] Preserve the selected tab and search in URL query parameters.
-- [ ] Add loading skeletons, errors with retry, and useful empty states.
-- [ ] Add Leaderboards to the primary navigation.
-- [ ] Separate owner campaigns from public browsing in the moderation area.
+- [x] Add Open, Awaiting results, and Results tabs backed by server query filters.
+- [x] Add title search, board count, board size, status, relevant date, and one contextual action per campaign.
+- [x] Preserve the selected tab and search in URL query parameters.
+- [x] Add loading skeletons, errors with retry, and useful empty states.
+- [x] Add Leaderboards to the primary navigation.
+- [x] Separate owner campaigns from public browsing in the moderation area.
 
 ### Design system and accessibility
 
-- [ ] Define semantic tokens for page, panel, text, border, focus, happened, failed, pending, and campaign accent colors.
-- [ ] Replace full-screen animated gradients on work screens with a quiet, high-contrast surface.
-- [ ] Disable the particle canvas by default outside the home screen.
-- [ ] Add a persistent Reduce motion setting and honor the operating-system preference.
-- [ ] Replace glass effects where they reduce text contrast.
-- [ ] Standardize buttons, fields, tabs, status badges, dialogs, and toast messages.
-- [ ] Make every workflow keyboard usable with visible focus states.
-- [ ] Test zoom to 200 percent and viewports from 320 pixels through wide desktop.
-- [ ] Add automated accessibility checks and a manual screen-reader pass.
+- [x] Define semantic tokens for page, panel, text, border, focus, happened, failed, pending, and campaign accent colors.
+- [x] Replace full-screen animated gradients on work screens with a quiet, high-contrast surface.
+- [x] Disable the particle canvas by default outside the home screen.
+- [x] Add a persistent Reduce motion setting and honor the operating-system preference.
+- [x] Replace glass effects where they reduce text contrast.
+- [x] Standardize buttons, fields, tabs, status badges, dialogs, and toast messages.
+- [x] Make every workflow keyboard usable with visible focus states.
+- [x] Test zoom to 200 percent and viewports from 320 pixels through wide desktop.
+- [x] Add automated accessibility checks and manually inspect the browser accessibility tree for critical workflows.
+- [ ] Run a hands-on VoiceOver/NVDA smoke check on the deployed build as a release check.
 
 ### Acceptance checks
 
-- [ ] Campaign status and next action are understandable without relying on color.
-- [ ] Body text and controls meet WCAG 2.2 AA contrast.
-- [ ] No board text or control overlaps at supported viewport widths.
-- [ ] Reduced-motion mode removes particles, ambient gradients, and nonessential transitions.
-- [ ] The UI still has recognizable campaign accents and satisfying outcome feedback.
+- [x] Campaign status and next action are understandable without relying on color.
+- [x] Body text and controls meet WCAG 2.2 AA contrast.
+- [x] No board text or control overlaps at supported viewport widths.
+- [x] Reduced-motion mode removes particles, ambient gradients, and nonessential transitions.
+- [x] The UI still has recognizable campaign accents and satisfying outcome feedback.
 
 ## Phase 5: Firebase Authentication and profiles
 

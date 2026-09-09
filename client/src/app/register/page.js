@@ -1,6 +1,7 @@
 "use client";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import Image from "next/image";
 import { userService } from "../services/userService";
 import Background from "../components/background";
 import Footer from "../components/footer";
@@ -13,131 +14,150 @@ export default function RegisterPage() {
   const [password, setPassword] = useState("");
   const [email, setEmail] = useState("");
   const [profileIcon, setProfileIcon] = useState("1");
+  const [error, setError] = useState("");
   const isFormValid = Boolean(firstName && lastName && username && password.length >= 8);
 
-  const handleSubmit = () => {
+  const handleSubmit = async (event) => {
+    event.preventDefault();
     if (!isFormValid) return;
-
-    userService
-      .addUser(firstName, lastName, username, password, email, profileIcon)
-      .then((response) => {
-        if (response.ok) {
-          // Auto login after registration
-          userService.loginUser(username, password).then((loginResp) => {
-            if (loginResp.ok) {
-              loginResp.json().then((data) => {
-                localStorage.setItem("token", data.token);
-                router.push("/home");
-              });
-            }
-          });
-        } else {
-          alert("Error: Username Already Exists.");
-        }
-      });
+    setError("");
+    try {
+      const response = await userService.addUser(firstName, lastName, username, password, email, profileIcon);
+      if (!response.ok) {
+        setError("That username is already in use.");
+        return;
+      }
+      const loginResponse = await userService.loginUser(username, password);
+      if (!loginResponse.ok) {
+        setError("Your account was created, but sign-in failed. Please use the login page.");
+        return;
+      }
+      const data = await loginResponse.json();
+      localStorage.setItem("token", data.token);
+      router.push("/home");
+    } catch {
+      setError("Registration could not be completed. Please try again.");
+    }
   };
 
   return (
-    <div className="relative min-h-screen flex flex-col items-center justify-center">
+    <div className="app-page relative flex flex-col items-center justify-center px-4 py-16">
       <Background />
 
-      <div className="z-10 w-full max-w-3xl p-10 rounded-3xl backdrop-blur-xl bg-white/10 border border-white/20 shadow-2xl">
+      <div className="app-panel z-10 w-full max-w-3xl p-6 sm:p-10">
         <h1 className="text-4xl font-bold text-white text-center mb-8">
           Register
         </h1>
 
-        <form className="space-y-6">
+        <form className="space-y-6" onSubmit={handleSubmit}>
           {/* Profile Icons */}
-          <div>
-            <label className="block text-sm font-medium text-white mb-2">
+          <fieldset>
+            <legend className="block text-sm font-medium text-white mb-2">
               Select Profile Icon <span className="text-red-500">*</span>
-            </label>
+            </legend>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {["1", "2", "3", "4"].map((id) => (
-                <div
+                <button
+                  type="button"
                   key={id}
                   onClick={() => setProfileIcon(id)}
-                  className={`cursor-pointer rounded-lg ${
+                  aria-pressed={profileIcon === id}
+                  className={`rounded-md border-2 p-2 ${
                     profileIcon === id
-                      ? "border-8 border-white-500" // thicker border when selected
-                      : "border-0 border-red-600" // thinner default border
+                      ? "border-focus bg-panel-strong"
+                      : "border-line"
                   }`}
                 >
-                  <img
+                  <Image
                     src={`/icon-${id}.png`}
                     alt={`Profile Icon ${id}`}
+                    width={160}
+                    height={160}
+                    priority={id === "1"}
                     className="w-full h-full object-cover rounded-lg"
                   />
-                </div>
+                </button>
               ))}
             </div>
-          </div>
+          </fieldset>
 
           {/* Name Fields */}
-          <div className="flex space-x-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label htmlFor="register-first-name" className="sr-only">First name</label>
             <input
+              id="register-first-name"
               type="text"
               placeholder="First Name"
               value={firstName}
               onChange={(e) => setFirstName(e.target.value)}
-              className="flex-1 px-4 py-3 rounded-xl border bg-white/10 text-white placeholder-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-400"
+              autoComplete="given-name"
+              className="ui-field"
             />
+            <label htmlFor="register-last-name" className="sr-only">Last name</label>
             <input
+              id="register-last-name"
               type="text"
               placeholder="Last Name"
               value={lastName}
               onChange={(e) => setLastName(e.target.value)}
-              className="flex-1 px-4 py-3 rounded-xl border bg-white/10 text-white placeholder-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-400"
+              autoComplete="family-name"
+              className="ui-field"
             />
           </div>
 
           {/* Username */}
+          <label htmlFor="register-username" className="sr-only">Username</label>
           <input
+            id="register-username"
             type="text"
             placeholder="Username"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            className="w-full px-4 py-3 rounded-xl border bg-white/10 text-white placeholder-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-400"
+            autoComplete="username"
+            className="ui-field"
           />
 
           {/* Password */}
+          <label htmlFor="register-password" className="sr-only">Password, 8 or more characters</label>
           <input
+            id="register-password"
             type="password"
             placeholder="Password (8+ characters)"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             minLength={8}
-            className="w-full px-4 py-3 rounded-xl border bg-white/10 text-white placeholder-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-400"
+            autoComplete="new-password"
+            className="ui-field"
           />
 
           {/* Email */}
+          <label htmlFor="register-email" className="sr-only">Email, optional</label>
           <input
+            id="register-email"
             type="email"
             placeholder="Email (optional)"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full px-4 py-3 rounded-xl border bg-white/10 text-white placeholder-gray-300 focus:ring-2 focus:ring-blue-500 focus:border-blue-400"
+            autoComplete="email"
+            className="ui-field"
           />
+
+          {error && <p role="alert" className="ui-toast border-rose-400 text-rose-100">{error}</p>}
 
           {/* Buttons */}
           <div className="flex flex-col md:flex-row justify-between items-center gap-4 mt-4">
             <button
               type="button"
               onClick={() => router.push("/")}
-              className="w-full md:w-auto px-6 py-3 rounded-xl bg-red-500 hover:bg-red-600 text-white font-semibold transition-all"
+              className="ui-button-danger w-full md:w-auto"
             >
               Cancel
             </button>
 
             <button
-              type="button"
-              onClick={handleSubmit}
+              type="submit"
               disabled={!isFormValid}
-              className={`w-full md:w-auto px-6 py-3 rounded-xl font-semibold transition-all ${
-                isFormValid
-                  ? "bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white"
-                  : "bg-gray-500 text-gray-300 cursor-not-allowed"
-              }`}
+              className="ui-button-primary w-full md:w-auto"
             >
               Register
             </button>

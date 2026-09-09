@@ -29,7 +29,7 @@ const getAllowedActions = (campaign) => {
         'cancel',
       ];
     case 'moderating':
-      return ['cancel'];
+      return ['finalize', 'cancel'];
     default:
       return [];
   }
@@ -57,6 +57,10 @@ class CampaignLifecycle {
 
   async getModeratorCampaign(code, userId) {
     return withAllowedActions(await this.getOwnedCampaign(code, userId));
+  }
+
+  finalize(code, userId) {
+    return this.database.finalizeCampaign(code, userId, this.clock());
   }
 
   async transition(code, userId, action) {

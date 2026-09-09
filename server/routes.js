@@ -13,7 +13,7 @@ const matchesLegacyPassword = (candidate, storedPassword) => {
   return timingSafeEqual(candidateDigest, storedDigest);
 };
 
-const createRouter = ({ database, config }) => {
+const createRouter = ({ database, config, campaignEvents }) => {
   const router = express.Router();
   const requireAuth = createAuthMiddleware(database, config.jwtSecret);
   const lifecycle = new CampaignLifecycle(database);
@@ -83,7 +83,20 @@ const createRouter = ({ database, config }) => {
   }));
 
   router.get('/campaigns', asyncRoute(async (req, res) => {
-    res.json(await database.getAllCampaigns());
+    const { group, query } = req.query;
+    if (group !== undefined && (typeof group !== 'string'
+      || !['open', 'awaiting', 'results'].includes(group))) {
+      res.status(400).json({ error: 'Group must be open, awaiting, or results' });
+      return;
+    }
+    if (query !== undefined && (typeof query !== 'string' || query.trim().length > 120)) {
+      res.status(400).json({ error: 'Query must be at most 120 characters' });
+      return;
+    }
+    res.json(await database.getAllCampaigns({
+      group,
+      query: query?.trim() || undefined,
+    }));
   }));
 
   router.get('/boards', asyncRoute(async (req, res) => {
@@ -134,6 +147,22 @@ const createRouter = ({ database, config }) => {
     res.json(await database.getCampaignBoards(req.params.code));
   }));
 
+  router.get('/campaigns/:code/results', asyncRoute(async (req, res) => {
+    const pageValue = req.query.page ?? '1';
+    const page = Number(pageValue);
+    if (typeof pageValue !== 'string' || !/^\d+$/.test(pageValue)
+      || !Number.isSafeInteger(page) || page < 1) {
+      res.status(400).json({ error: 'Page must be a positive integer' });
+      return;
+    }
+    const results = await database.getCampaignResults(req.params.code, page);
+    if (!results) {
+      res.status(404).json({ error: 'Campaign results not found' });
+      return;
+    }
+    res.json(results);
+  }));
+
   router.get('/boards/:boardCode', asyncRoute(async (req, res) => {
     const board = await database.getPlayerBoardByCode(req.params.boardCode);
     if (!board) {
@@ -145,6 +174,7 @@ const createRouter = ({ database, config }) => {
 
   const transitionCampaign = (action) => asyncRoute(async (req, res) => {
     const campaign = await lifecycle.transition(req.params.code, req.user.id, action);
+    campaignEvents?.emit('status.changed', campaign);
     res.json({ success: true, campaign });
   });
 
@@ -154,31 +184,25 @@ const createRouter = ({ database, config }) => {
   router.post('/campaigns/:code/moderation', requireAuth, transitionCampaign('startModeration'));
   router.post('/campaigns/:code/cancel', requireAuth, transitionCampaign('cancel'));
 
-  router.post('/campaigns/:code/call', requireAuth, validateBody(schemas.callItem), asyncRoute(async (req, res) => {
-    const campaign = await database.getCampaignByCode(req.params.code);
-    if (!campaign) {
-      res.status(404).json({ error: 'Campaign not found' });
-      return;
-    }
-    if (campaign.createdBy !== req.user.id) {
-      res.status(403).json({ error: 'Only the campaign creator can mark items' });
-      return;
-    }
-    if (campaign.status !== 'moderating') {
-      res.status(409).json({ error: 'Campaign is not being moderated' });
-      return;
-    }
+  router.post('/campaigns/:code/finalize', requireAuth, asyncRoute(async (req, res) => {
+    const result = await lifecycle.finalize(req.params.code, req.user.id);
+    if (!result.alreadyFinalized) campaignEvents?.emit('campaign.finalized', result);
+    res.json({ success: true, ...result });
+  }));
 
-    const result = await database.updateCampaignCategoryItemStatus(
-      campaign.id,
-      req.validatedBody.itemId,
-      req.validatedBody.status,
-    );
-    if (result.changes === 0) {
-      res.status(404).json({ error: 'Campaign item not found' });
+  router.post('/campaigns/:code/items/:itemId/outcome', requireAuth, validateBody(schemas.itemOutcome), asyncRoute(async (req, res) => {
+    if (!/^\d+$/.test(req.params.itemId) || Number(req.params.itemId) < 1) {
+      res.status(400).json({ error: 'Campaign item ID must be a positive integer' });
       return;
     }
-    res.json({ success: true, message: `Item marked as ${req.validatedBody.status}` });
+    const result = await database.updateItemOutcome(
+      req.params.code,
+      Number(req.params.itemId),
+      req.validatedBody.status,
+      req.user.id,
+    );
+    campaignEvents?.emit('outcome.updated', result);
+    res.json({ success: true, ...result });
   }));
 
   router.delete('/campaigns/:code', requireAuth, asyncRoute(async (req, res) => {
@@ -189,6 +213,10 @@ const createRouter = ({ database, config }) => {
     }
     if (campaign.createdBy !== req.user.id) {
       res.status(403).json({ error: 'Only the campaign creator can delete it' });
+      return;
+    }
+    if (campaign.status === 'completed') {
+      res.status(409).json({ error: 'Completed campaigns cannot be deleted' });
       return;
     }
     await database.deleteCampaign(campaign.id);

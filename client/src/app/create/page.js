@@ -1,13 +1,14 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import Background from "../components/background";
-import { BackgroundProvider, useBackground } from "../components/context";
+import { useBackground } from "../components/context";
 import Footer from "../components/footer";
 import { campaignService } from "../services/campaignService";
 import Header from "../components/header";
-import { ArrowLeft, Plus, X, Trash2, Calendar, Clock, Palette, Grid3X3, Square, SquareStack, Check, Sparkles, Wand2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, X, Trash2, Palette, Grid3X3, Square, SquareStack, Check, Sparkles, Wand2, ChevronLeft, ChevronRight, Download, Upload } from "lucide-react";
+import { downloadExampleCampaign, parseCampaignImport } from "./campaignImport.mjs";
 
 
 // Preset gradients and animations
@@ -91,10 +92,6 @@ const animationTypes = [
   { id: 'shimmer', name: 'Shimmer', icon: '✨' }
 ];
 
-  // Background stuff
-  const [showGradient, setShowGradient] = useState(true);
-  const [showDots, setShowDots] = useState(true);
-
   const [timeZone, setTimeZone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone);
   
   // Categories
@@ -102,6 +99,10 @@ const animationTypes = [
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryType, setNewCategoryType] = useState("choose_many"); // choose_many, choose_one_required, choose_one_optional
   const [newCategoryItems, setNewCategoryItems] = useState([""]);
+  const [importError, setImportError] = useState("");
+  const [importMessage, setImportMessage] = useState("");
+  const [creationError, setCreationError] = useState("");
+  const importInputRef = useRef(null);
 
 // Use the custom theme if present
 useEffect(() => {
@@ -113,7 +114,6 @@ useEffect(() => {
       animation: customTheme.animation
     };
     setSelectedPreset(customThemeObject);
-    console.log("Custom theme applied:", customThemeObject);
   }
 }, [customTheme, themeMode, setSelectedPreset]);
 
@@ -125,20 +125,6 @@ useEffect(() => {
     }
   }, [router]);
 
-  // Get current theme (preset or custom)
-  const getCurrentTheme = () => {
-    if (themeMode === 'preset') {
-      return selectedPreset;
-    } else {
-      return {
-        id: 'custom',
-        name: customTheme.name || 'Custom Theme',
-        gradient: customTheme.selectedGradient || validGradientCombinations[0].gradient,
-        animation: customTheme.animation
-      };
-    }
-  };
-
   const addCategory = () => {
     if (newCategoryName.trim() && newCategoryItems.some(item => item.trim())) {
       const category = {
@@ -146,7 +132,7 @@ useEffect(() => {
         name: newCategoryName,
         type: newCategoryType,
         items: newCategoryItems.filter(item => item.trim()),
-        required: newCategoryType === "choose_one_required"
+        required: newCategoryType.endsWith("_required")
       };
       
       setCategories([...categories, category]);
@@ -158,6 +144,39 @@ useEffect(() => {
 
   const removeCategory = (id) => {
     setCategories(categories.filter(cat => cat.id !== id));
+  };
+
+  const updateCategory = (id, updates) => {
+    setCategories((current) => current.map((category) => (
+      category.id === id ? { ...category, ...updates } : category
+    )));
+  };
+
+  const updateExistingCategoryItem = (categoryId, itemIndex, value) => {
+    setCategories((current) => current.map((category) => (
+      category.id === categoryId
+        ? {
+            ...category,
+            items: category.items.map((item, index) => (index === itemIndex ? value : item)),
+          }
+        : category
+    )));
+  };
+
+  const addExistingCategoryItem = (categoryId) => {
+    setCategories((current) => current.map((category) => (
+      category.id === categoryId
+        ? { ...category, items: [...category.items, ""] }
+        : category
+    )));
+  };
+
+  const removeExistingCategoryItem = (categoryId, itemIndex) => {
+    setCategories((current) => current.map((category) => (
+      category.id === categoryId
+        ? { ...category, items: category.items.filter((_, index) => index !== itemIndex) }
+        : category
+    )));
   };
 
   const addCategoryItem = () => {
@@ -176,7 +195,39 @@ useEffect(() => {
     }
   };
 
+  const handleImport = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setImportError("");
+    setImportMessage("");
+    try {
+      const imported = parseCampaignImport(await file.text());
+      const [importedDate, importedTime] = imported.startDateTime.split("T");
+      const preset = backgroundPresets.find(({ id }) => id === imported.backgroundPresetId);
+      setTitle(imported.title);
+      setDescription(imported.description);
+      setBoardSize(imported.boardSize);
+      setStartDate(importedDate);
+      setStartTime(importedTime);
+      if (imported.timeZone) setTimeZone(imported.timeZone);
+      setThemeMode("preset");
+      setSelectedPreset(preset || backgroundPresets[0]);
+      setCategories(imported.categories.map((category, index) => ({
+        ...category,
+        id: `${Date.now()}-${index}`,
+        required: category.required ?? category.type.endsWith("_required"),
+      })));
+      setStep(1);
+      setImportMessage(`Imported ${imported.categories.length} categories. Review and edit before creating.`);
+    } catch (error) {
+      setImportError(error.message);
+    } finally {
+      event.target.value = "";
+    }
+  };
+
   const handleCreateCampaign = async () => {
+    setCreationError("");
     setLoading(true);
     try {
       const campaignData = {
@@ -197,15 +248,14 @@ useEffect(() => {
       const response = await campaignService.createCampaign(campaignData);
       if (response.ok) {
         const data = await response.json();
-        // Show success with campaign code
-        alert(`Campaign created! Your code is: ${data.campaign.code}`);
         router.push(`/moderate/${data.campaign.code}`);
       } else {
-        alert("Error creating campaign. Please try again.");
+        const data = await response.json().catch(() => ({}));
+        setCreationError(data.error || "Campaign creation failed. Please try again.");
       }
     } catch (error) {
       console.error("Error creating campaign:", error);
-      alert("Error creating campaign. Please try again.");
+      setCreationError("Campaign creation failed. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -214,8 +264,9 @@ useEffect(() => {
   const getCategoryTypeLabel = (type) => {
     switch (type) {
       case "choose_many": return "Choose Many";
+      case "choose_many_required": return "Choose Many (Required)";
+      case "choose_one": return "Choose One";
       case "choose_one_required": return "Choose One (Required)";
-      case "choose_one_optional": return "Choose One (Optional)";
       default: return type;
     }
   };
@@ -223,8 +274,9 @@ useEffect(() => {
   const getCategoryTypeColor = (type) => {
     switch (type) {
       case "choose_many": return "bg-blue-500/20 border-blue-400";
+      case "choose_many_required": return "bg-cyan-500/20 border-cyan-400";
+      case "choose_one": return "bg-green-500/20 border-green-400";
       case "choose_one_required": return "bg-red-500/20 border-red-400";
-      case "choose_one_optional": return "bg-green-500/20 border-green-400";
       default: return "bg-gray-500/20 border-gray-400";
     }
   };
@@ -238,7 +290,7 @@ useEffect(() => {
 
   return (
 
-  <div className={`w-full h-100 rounded-2xl border-2 border-white/30`}>
+  <div className="app-page w-full">
     <Background />
     <div className="relative min-h-screen flex flex-col">
       <Header />
@@ -248,12 +300,29 @@ useEffect(() => {
       <div className="flex-1 px-6 py-8 flex items-center justify-center">
         <div className="w-full max-w-4xl">
           {/* Header */}
-          <div className="flex items-center justify-between mb-8">
-            <div className="w-32"></div> {/* Spacer */}
-
+          <div className="mb-8 flex flex-col items-center justify-between gap-5 sm:flex-row">
+            <div className="flex gap-2 sm:w-56">
+              <button
+                type="button"
+                onClick={() => importInputRef.current?.click()}
+                className="ui-button-secondary"
+              >
+                <Upload className="h-4 w-4" />
+                Import JSON
+              </button>
+              <input
+                ref={importInputRef}
+                type="file"
+                accept="application/json,.json"
+                aria-label="Import campaign JSON file"
+                onChange={handleImport}
+                className="sr-only"
+              />
+            </div>
             <div className="text-center">
               <h1 className="text-3xl font-bold text-white mb-2">Create Campaign</h1>
-              <div className="flex items-center space-x-2">
+              <p className="sr-only">Step {step} of 4</p>
+              <div className="flex items-center space-x-2" aria-hidden="true">
                 {[1, 2, 3, 4].map((s) => (
                   <div
                     key={s}
@@ -264,60 +333,82 @@ useEffect(() => {
                 ))}
               </div>
             </div>
-            
-            <div className="w-32"></div> {/* Spacer */}
+            <div className="flex justify-end sm:w-56">
+              <button
+                type="button"
+                onClick={downloadExampleCampaign}
+                className="ui-button-secondary"
+              >
+                <Download className="h-4 w-4" />
+                Example JSON
+              </button>
+            </div>
           </div>
+
+          {(importMessage || importError) && (
+            <p
+              role={importError ? "alert" : "status"}
+              className={`mb-6 border-l-4 px-4 py-3 text-sm ${
+                importError
+                  ? "border-rose-400 bg-rose-500/15 text-rose-100"
+                  : "border-emerald-400 bg-emerald-500/15 text-emerald-100"
+              }`}
+            >
+              {importError || importMessage}
+            </p>
+          )}
 
           {/* Step 1: Basic Information */}
               <AnimatePresence mode="wait">
                 {step === 1 && (
                   <div>
                   <motion.div
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -20 }}
-                    className="bg-black/30 backdrop-blur-sm rounded-3xl p-8 border-2 border-white/20 shadow-2xl"
+                    className="app-panel p-5 sm:p-8"
                   >
                     <h2 className="text-2xl font-bold text-white mb-6">Basic Information</h2>
                     
                     {/* Campaign Title */}
                     <div className="mb-6">
-                      <label className="block text-white font-semibold mb-2">Campaign Title</label>
+                      <label htmlFor="campaign-title" className="block text-white font-semibold mb-2">Campaign Title</label>
                       <input
+                        id="campaign-title"
                         type="text"
                         value={title}
                         onChange={(e) => setTitle(e.target.value)}
                         placeholder="Enter your campaign title..."
-                        className="w-full px-4 py-3 rounded-xl bg-white/10 text-white placeholder-gray-300 border-3 border-white/30 focus:border-blue-400 focus:ring-2 focus:ring-blue-500 transition-all"
+                        className="ui-field"
                       />
                     </div>
 
                     {/* Campaign Description */}
                     <div className="mb-6">
-                      <label className="block text-white font-semibold mb-2">Description</label>
+                      <label htmlFor="campaign-description" className="block text-white font-semibold mb-2">Description</label>
                       <textarea
+                        id="campaign-description"
                         value={description}
                         onChange={(e) => setDescription(e.target.value)}
                         placeholder="Briefly describe your campaign..."
                         rows={3}
-                        className="w-full px-4 py-3 rounded-xl bg-white/10 text-white placeholder-gray-300 border-3 border-white/30 focus:border-blue-400 focus:ring-2 focus:ring-blue-500 transition-all"
+                        className="ui-field"
                       />
                     </div>
 
                     {/* Board Size */}
-                    <div className="mb-6">
-                      <label className="block text-white font-semibold mb-4">Board Size</label>
-                      <div className="flex space-x-4">
+                    <fieldset className="mb-6">
+                      <legend className="block text-white font-semibold mb-4">Board Size</legend>
+                      <div className="flex gap-4">
                         {boardSizes.map((size) => {
                           const IconComponent = size.icon;
                           return (
                             <button
+                              type="button"
                               key={size.value}
                               onClick={() => setBoardSize(size.value)}
-                              className={`flex-1 p-4 rounded-xl border-3 transition-all ${
+                              aria-pressed={boardSize === size.value}
+                              className={`flex-1 rounded-md border p-4 transition-colors ${
                                 boardSize === size.value
-                                  ? "border-white bg-white/10 scale-105"
-                                  : "border-white/30 hover:border-white/50"
+                                  ? "border-focus bg-panel-strong"
+                                  : "border-line hover:border-slate-300"
                               }`}
                             >
                               <IconComponent className="w-8 h-8 text-white mx-auto mb-2" />
@@ -327,36 +418,39 @@ useEffect(() => {
                           );
                         })}
                       </div>
-                    </div>
+                    </fieldset>
 
                     {/* Start Date & Time */}
                     <div className="grid md:grid-cols-2 gap-4 mb-8">
                       <div>
-                        <label className="block text-white font-semibold mb-2">Start Date</label>
+                        <label htmlFor="campaign-start-date" className="block text-white font-semibold mb-2">Start Date</label>
                         <input
+                          id="campaign-start-date"
                           type="date"
                           value={startDate}
                           onChange={(e) => setStartDate(e.target.value)}
-                          className="w-full px-4 py-3 rounded-xl bg-white/10 text-white border-3 border-white/30 focus:border-blue-400 focus:ring-2 focus:ring-blue-500 transition-all"
+                          className="ui-field"
                         />
                       </div>
                       <div>
-                        <label className="block text-white font-semibold mb-2">Start Time</label>
+                        <label htmlFor="campaign-start-time" className="block text-white font-semibold mb-2">Start Time</label>
                         <input
+                          id="campaign-start-time"
                           type="time"
                           value={startTime}
                           onChange={(e) => setStartTime(e.target.value)}
-                          className="w-full px-4 py-3 rounded-xl bg-white/10 text-white border-3 border-white/30 focus:border-blue-400 focus:ring-2 focus:ring-blue-500 transition-all"
+                          className="ui-field"
                         />
                       </div>
                     </div>
 
                     <div className="mb-8">
-                      <label className="block text-white font-semibold mb-2">Time Zone</label>
+                      <label htmlFor="campaign-time-zone" className="block text-white font-semibold mb-2">Time Zone</label>
                       <select
+                        id="campaign-time-zone"
                         value={timeZone}
                         onChange={(e) => setTimeZone(e.target.value)}
-                        className="w-full px-4 py-3 rounded-xl bg-white/10 text-white border-3 border-white/30 focus:border-blue-400 focus:ring-2 focus:ring-blue-500 transition-all"
+                        className="ui-field"
                       >
                         <option value="America/New_York">Eastern Time</option>
                         <option value="America/Chicago">Central Time</option>
@@ -376,7 +470,7 @@ useEffect(() => {
                       whileTap={{ scale: 0.97 }}
                       onClick={() => setStep(2)}
                       disabled={!title || !startDate || !startTime}
-                      className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-8 py-3 rounded-xl font-semibold border-3 border-white/30 hover:border-white/50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                      className="ui-button-primary"
                     >
                       Next: Design Theme
                       <ChevronRight className="w-5 h-5 ml-2 inline" />
@@ -388,36 +482,37 @@ useEffect(() => {
                 {/* Step 2: Theme Design */}
                 {step === 2 && (
                   <motion.div
-                    initial={{ opacity: 0, x: 20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -20 }}
                     className="space-y-6"
                   >
-                    <div className="bg-black/30 backdrop-blur-sm rounded-3xl p-8 border-2 border-white/20 shadow-2xl">
+                    <div className="app-panel p-5 sm:p-8">
                       <div className="flex items-center mb-6">
                         <Palette className="w-6 h-6 text-white mr-3" />
                         <h2 className="text-2xl font-bold text-white">Choose Your Theme</h2>
                       </div>
 
                       {/* Theme Mode Selector */}
-                      <div className="flex mb-8">
+                      <div className="mb-8 flex" role="group" aria-label="Theme source">
                         <button
+                          type="button"
                           onClick={() => setThemeMode('preset')}
-                          className={`flex-1 flex items-center justify-center py-3 px-4 rounded-l-xl border-3 transition-all ${
+                          aria-pressed={themeMode === 'preset'}
+                          className={`flex min-h-11 flex-1 items-center justify-center rounded-l-md border px-4 py-3 transition-colors ${
                             themeMode === 'preset'
-                              ? 'bg-white/20 border-white text-white'
-                              : 'bg-white/5 border-white/30 text-white/70 hover:border-white/50'
+                              ? 'border-focus bg-panel-strong text-white'
+                              : 'border-line bg-panel text-muted hover:text-white'
                           }`}
                         >
                           <Sparkles className="w-5 h-5 mr-2" />
                           Preset Themes
                         </button>
                         <button
+                          type="button"
                           onClick={() => setThemeMode('custom')}
-                          className={`flex-1 flex items-center justify-center py-3 px-4 rounded-r-xl border-3 transition-all ${
+                          aria-pressed={themeMode === 'custom'}
+                          className={`flex min-h-11 flex-1 items-center justify-center rounded-r-md border px-4 py-3 transition-colors ${
                             themeMode === 'custom'
-                              ? 'bg-white/20 border-white text-white'
-                              : 'bg-white/5 border-white/30 text-white/70 hover:border-white/50'
+                              ? 'border-focus bg-panel-strong text-white'
+                              : 'border-line bg-panel text-muted hover:text-white'
                           }`}
                         >
                           <Wand2 className="w-5 h-5 mr-2" />
@@ -432,17 +527,19 @@ useEffect(() => {
                           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                             {backgroundPresets.map((preset) => (
                               <button
+                                type="button"
                                 key={preset.id}
                                 onClick={() => setSelectedPreset(preset)}
-                                className={`relative p-4 rounded-xl border-3 transition-all ${
+                                aria-pressed={selectedPreset.id === preset.id}
+                                className={`relative rounded-md border p-4 transition-colors ${
                                   selectedPreset.id === preset.id
-                                    ? "border-white scale-105"
-                                    : "border-white/30 hover:border-white/50"
+                                    ? "border-focus bg-panel-strong"
+                                    : "border-line hover:border-slate-300"
                                 }`}
                               >
                                 <div className={`w-full h-16 bg-gradient-to-r ${preset.gradient} rounded-lg mb-2`}></div>
                                 <p className="text-white text-sm font-medium">{preset.name}</p>
-                                <p className="text-white/60 text-xs">{preset.animation}</p>
+                                <p className="text-xs text-muted">{preset.animation}</p>
                                 {selectedPreset.id === preset.id && (
                                   <div className="absolute top-2 right-2">
                                     <Check className="w-5 h-5 text-white bg-green-500 rounded-full p-1" />
@@ -458,13 +555,14 @@ useEffect(() => {
                       {themeMode === 'custom' && (
                         <div className="space-y-6">
                           <div>
-                            <label className="block text-white font-semibold mb-2">Theme Name</label>
+                            <label htmlFor="custom-theme-name" className="block text-white font-semibold mb-2">Theme Name</label>
                             <input
+                              id="custom-theme-name"
                               type="text"
                               value={customTheme.name}
                               onChange={(e) => setCustomTheme({...customTheme, name: e.target.value})}
                               placeholder="Enter a name for your theme..."
-                              className="w-full px-4 py-3 rounded-xl bg-white/10 text-white placeholder-gray-300 border-3 border-white/30 focus:border-purple-400 focus:ring-2 focus:ring-purple-500 transition-all"
+                              className="ui-field"
                             />
                           </div>
 
@@ -477,16 +575,18 @@ useEffect(() => {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                               {validGradientCombinations.map((combo, index) => (
                                 <button
+                                  type="button"
                                   key={index}
                                   onClick={() => setCustomTheme({
                                     ...customTheme, 
                                     selectedGradient: combo.gradient,
                                     gradientName: combo.name
                                   })}
-                                  className={`relative p-4 rounded-xl border-3 transition-all ${
+                                  aria-pressed={customTheme.selectedGradient === combo.gradient}
+                                  className={`relative rounded-md border p-4 transition-colors ${
                                     customTheme.selectedGradient === combo.gradient
-                                      ? "border-white bg-white/10 scale-105"
-                                      : "border-white/30 hover:border-white/50"
+                                      ? "border-focus bg-panel-strong"
+                                      : "border-line hover:border-slate-300"
                                   }`}
                                 >
                                   <div className={`w-full h-12 bg-gradient-to-r ${combo.gradient} rounded-lg mb-2`}></div>
@@ -506,12 +606,14 @@ useEffect(() => {
                               <div className="grid grid-cols-3 gap-3">
                                 {animationTypes.map((anim) => (
                                   <button
+                                    type="button"
                                     key={anim.id}
                                     onClick={() => setCustomTheme({...customTheme, animation: anim.id})}
-                                    className={`p-3 rounded-lg border-2 transition-all ${
+                                    aria-pressed={customTheme.animation === anim.id}
+                                    className={`rounded-md border p-3 transition-colors ${
                                       customTheme.animation === anim.id
-                                        ? 'border-white bg-white/20 text-white'
-                                        : 'border-white/30 hover:border-white/50 text-white/70'
+                                        ? 'border-focus bg-panel-strong text-white'
+                                        : 'border-line text-muted hover:border-slate-300 hover:text-white'
                                     }`}
                                   >
                                     <div className="text-2xl mb-1">{anim.icon}</div>
@@ -532,7 +634,7 @@ useEffect(() => {
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.97 }}
                         onClick={() => setStep(1)}
-                        className="bg-white/10 text-white px-6 py-3 rounded-xl font-semibold border-3 border-white/30 hover:border-white/50 transition-all"
+                        className="ui-button-secondary"
                       >
                         <ChevronLeft className="w-5 h-5 mr-2 inline" />
                         Back
@@ -542,7 +644,7 @@ useEffect(() => {
                         whileHover={{ scale: 1.05 }}
                         whileTap={{ scale: 0.97 }}
                         onClick={() => setStep(3)}
-                        className="bg-gradient-to-r from-purple-500 to-purple-600 text-white px-8 py-3 rounded-xl font-semibold border-3 border-white/30 hover:border-white/50 transition-all"
+                        className="ui-button-primary"
                       >
                         Next: Add Categories
                         <ChevronRight className="w-5 h-5 ml-2 inline" />
@@ -554,14 +656,11 @@ useEffect(() => {
                 {/* Step 3: Categories */}
             {step === 3 && (
               <motion.div
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
                 className="space-y-6"
               >
                 {/* Existing Categories */}
                 {categories.length > 0 && (
-                  <div className="bg-black/30 backdrop-blur-sm rounded-3xl p-8 border-2 border-white/20 shadow-2xl">
+                  <div className="app-panel p-5 sm:p-8">
                     <h3 className="text-xl font-bold text-white mb-4">Added Categories</h3>
                     <div className="space-y-4">
                       {categories.map((category) => (
@@ -569,27 +668,78 @@ useEffect(() => {
                           key={category.id}
                           className={`p-4 rounded-xl border-2 ${getCategoryTypeColor(category.type)}`}
                         >
-                          <div className="flex justify-between items-start mb-2">
-                            <div>
-                              <h4 className="text-white font-semibold">{category.name}</h4>
-                              <p className="text-gray-300 text-sm">{getCategoryTypeLabel(category.type)}</p>
+                          <div className="mb-4 flex items-start gap-3">
+                            <div className="grid min-w-0 flex-1 gap-3 md:grid-cols-2">
+                              <label className="text-sm font-semibold text-white">
+                                Category name
+                                <input
+                                  type="text"
+                                  value={category.name}
+                                  onChange={(event) => updateCategory(category.id, { name: event.target.value })}
+                                  className="mt-1 w-full rounded-md border border-white/30 bg-black/20 px-3 py-2 text-white"
+                                />
+                              </label>
+                              <label className="text-sm font-semibold text-white">
+                                Selection type
+                                <select
+                                  value={category.type}
+                                  onChange={(event) => updateCategory(category.id, {
+                                    type: event.target.value,
+                                    required: event.target.value.endsWith("_required"),
+                                  })}
+                                  className="mt-1 w-full rounded-md border border-white/30 bg-gray-900 px-3 py-2 text-white"
+                                >
+                                  <option value="choose_many">Choose Many</option>
+                                  <option value="choose_many_required">Choose Many (Required)</option>
+                                  <option value="choose_one">Choose One</option>
+                                  <option value="choose_one_required">Choose One (Required)</option>
+                                </select>
+                              </label>
                             </div>
                             <button
+                              type="button"
                               onClick={() => removeCategory(category.id)}
-                              className="text-red-400 hover:text-red-300 transition-colors"
+                              className="shrink-0 rounded-md p-2 text-red-300 hover:bg-red-500/15"
+                              aria-label={`Remove ${category.name}`}
+                              title="Remove category"
                             >
                               <X className="w-5 h-5" />
                             </button>
                           </div>
-                          <div className="flex flex-wrap gap-2">
-                            {category.items.map((item, idx) => (
-                              <span
-                                key={idx}
-                                className="bg-white/20 text-white px-3 py-1 rounded-lg text-sm"
-                              >
-                                {item}
-                              </span>
+                          <div className="space-y-2">
+                            {category.items.map((item, itemIndex) => (
+                              <div key={itemIndex} className="flex gap-2">
+                                <input
+                                  type="text"
+                                  value={item}
+                                  onChange={(event) => updateExistingCategoryItem(
+                                    category.id,
+                                    itemIndex,
+                                    event.target.value,
+                                  )}
+                                  aria-label={`${category.name} item ${itemIndex + 1}`}
+                                  className="min-w-0 flex-1 rounded-md border border-white/30 bg-black/20 px-3 py-2 text-sm text-white"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => removeExistingCategoryItem(category.id, itemIndex)}
+                                  disabled={category.items.length === 1}
+                                  className="rounded-md p-2 text-red-300 hover:bg-red-500/15 disabled:opacity-40"
+                                  aria-label={`Remove item ${itemIndex + 1} from ${category.name}`}
+                                  title="Remove item"
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </button>
+                              </div>
                             ))}
+                            <button
+                              type="button"
+                              onClick={() => addExistingCategoryItem(category.id)}
+                              className="inline-flex items-center gap-1.5 text-sm font-semibold text-white hover:text-green-200"
+                            >
+                              <Plus className="h-4 w-4" />
+                              Add item
+                            </button>
                           </div>
                         </div>
                       ))}
@@ -598,29 +748,31 @@ useEffect(() => {
                 )}
 
                 {/* Add New Category */}
-                <div className="bg-black/30 backdrop-blur-sm rounded-3xl p-8 border-2 border-white/20 shadow-2xl">
+                <div className="app-panel p-5 sm:p-8">
                   <h3 className="text-xl font-bold text-white mb-6">Add New Category</h3>
                   
                   {/* Category Name & Type */}
                   <div className="grid md:grid-cols-2 gap-4 mb-4">
                     <div>
-                      <label className="block text-white font-semibold mb-2">Category Name</label>
+                      <label htmlFor="new-category-name" className="block text-white font-semibold mb-2">Category Name</label>
                       <input
+                        id="new-category-name"
                         type="text"
                         value={newCategoryName}
                         onChange={(e) => setNewCategoryName(e.target.value)}
                         placeholder="e.g., Predictions, Events, etc."
-                        className="w-full px-4 py-3 rounded-xl bg-white/10 text-white placeholder-gray-300 border-3 border-white/30 focus:border-green-400 focus:ring-2 focus:ring-green-500 transition-all"
+                        className="ui-field"
                       />
                     </div>
                     <div>
                       <label className="block text-white font-semibold mb-2">Category Type</label>
                       <div className="flex items-center gap-4 mb-2">
-                        <label className="text-white font-semibold">Selection Type:</label>
+                        <label htmlFor="new-category-type" className="text-white font-semibold">Selection Type:</label>
                         <select
+                          id="new-category-type"
                           value={newCategoryType}
                           onChange={(e) => setNewCategoryType(e.target.value)}
-                          className="px-3 py-2 rounded-xl bg-white/10 text-white border-2 border-white/30"
+                          className="ui-field"
                         >
                           <option value="choose_many">Select Many</option>
                           <option value="choose_one">Select One</option>
@@ -653,12 +805,16 @@ useEffect(() => {
                             value={item}
                             onChange={(e) => updateCategoryItem(index, e.target.value)}
                             placeholder={`Item ${index + 1}...`}
-                            className="flex-1 px-4 py-2 rounded-xl bg-white/10 text-white placeholder-gray-300 border-2 border-white/30 focus:border-green-400 transition-all"
+                            aria-label={`New category item ${index + 1}`}
+                            className="ui-field min-w-0 flex-1"
                           />
                           {newCategoryItems.length > 1 && (
                             <button
+                              type="button"
                               onClick={() => removeCategoryItem(index)}
-                              className="text-red-400 hover:text-red-300 p-2"
+                              className="rounded-md p-2 text-red-300 hover:bg-red-500/15"
+                              aria-label={`Remove new category item ${index + 1}`}
+                              title="Remove item"
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>
@@ -666,6 +822,7 @@ useEffect(() => {
                         </div>
                       ))}
                       <button
+                        type="button"
                         onClick={addCategoryItem}
                         className="flex items-center text-green-400 hover:text-green-300 transition-colors"
                       >
@@ -677,9 +834,10 @@ useEffect(() => {
 
                   {/* Add Category Button */}
                   <button
+                    type="button"
                     onClick={addCategory}
                     disabled={!newCategoryName || !newCategoryItems.some(item => item.trim())}
-                    className="w-full bg-gradient-to-r from-green-500 to-green-600 text-white py-3 rounded-xl font-semibold border-3 border-white/30 hover:border-white/50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                    className="ui-button-primary w-full"
                   >
                     Add Category
                   </button>
@@ -691,7 +849,7 @@ useEffect(() => {
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.97 }}
                     onClick={() => setStep(1)}
-                    className="bg-white/10 text-white px-6 py-3 rounded-xl font-semibold border-3 border-white/30 hover:border-white/50 transition-all"
+                    className="ui-button-secondary"
                   >
                     Back
                   </motion.button>
@@ -701,7 +859,7 @@ useEffect(() => {
                     whileTap={{ scale: 0.97 }}
                     onClick={() => setStep(4)}
                     disabled={!hasEnoughItems}
-                    className="bg-gradient-to-r from-blue-500 to-blue-600 text-white px-8 py-3 rounded-xl font-semibold border-3 border-white/30 hover:border-white/50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                    className="ui-button-primary"
                   >
                     Review & Create
                   </motion.button>
@@ -717,10 +875,7 @@ useEffect(() => {
             {/* Step 4: Review & Create */}
             {step === 4 && (
               <motion.div
-                initial={{ opacity: 0, x: 20 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -20 }}
-                className="bg-black/30 backdrop-blur-sm rounded-3xl p-8 border-2 border-white/20 shadow-2xl"
+                className="app-panel p-5 sm:p-8"
               >
                 <h2 className="text-2xl font-bold text-white mb-6">Review Campaign</h2>
                 
@@ -776,12 +931,17 @@ useEffect(() => {
                 </div>
 
                 {/* Actions */}
+                {creationError && (
+                  <p role="alert" className="ui-toast mb-6 border-rose-400 text-rose-100">
+                    {creationError}
+                  </p>
+                )}
                 <div className="flex justify-between">
                   <motion.button
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.97 }}
                     onClick={() => setStep(2)}
-                    className="bg-white/10 text-white px-6 py-3 rounded-xl font-semibold border-3 border-white/30 hover:border-white/50 transition-all"
+                    className="ui-button-secondary"
                   >
                     Back to Edit
                   </motion.button>
@@ -791,7 +951,7 @@ useEffect(() => {
                     whileTap={{ scale: 0.97 }}
                     onClick={handleCreateCampaign}
                     disabled={loading || !hasEnoughItems}
-                    className="bg-gradient-to-r from-green-500 to-green-600 text-white px-8 py-4 rounded-xl font-semibold border-3 border-white/30 hover:border-white/50 disabled:opacity-50 transition-all"
+                    className="ui-button-primary"
                   >
                     {loading ? "Creating..." : "Create Campaign"}
                   </motion.button>
@@ -801,10 +961,7 @@ useEffect(() => {
           </AnimatePresence>
         </div>
       </div>
-      <Footer
-        showDots={showDots}
-        showGradient={showGradient}
-      />
+      <Footer />
     </div>
     </div>
   );
