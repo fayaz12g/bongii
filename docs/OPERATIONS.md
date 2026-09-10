@@ -73,7 +73,7 @@ Fly scrapes `GET /api/metrics` in Prometheus format. The endpoint reports HTTP r
 - A changed checksum stops startup rather than applying uncertain schema changes.
 - Each migration runs inside `BEGIN IMMEDIATE` and rolls back completely on error.
 - Foreign-key enforcement is enabled on every application and migration connection.
-- Migration `007_remove_legacy_password.js` refuses to run while any account lacks a Firebase UID or retains a password value.
+- Migration `007_remove_legacy_password.js` refuses to run while any retained account lacks a Firebase UID or retains a password value. It can remove at most one unlinked account, and only when no campaign, signed-in board, outcome decision, or finalization references it.
 
 Check a database without starting the API:
 
@@ -86,7 +86,7 @@ DATABASE_PATH=./data/bongii.db npm --prefix server run db:migrate
 1. Confirm the deployed app and volume: `fly status -a bongii` and `fly volumes list -a bongii`.
 2. Confirm `DATABASE_PATH=/data/test.db`. This is the historical production filename and must not be renamed as part of a schema release.
 3. Create a Fly volume snapshot and confirm it is listed. Follow the current [Fly volume snapshot documentation](https://fly.io/docs/volumes/volume-manage/#restore-a-volume-from-a-snapshot) because flyctl syntax can change.
-4. Record the snapshot ID, current image version, expected migration filenames, and current row counts. Before migration `007`, run `npm run auth:audit` and require every account to be Firebase-linked with zero legacy passwords.
+4. Record the snapshot ID, current image version, expected migration filenames, and current row counts. Before migration `007`, run `npm run auth:audit`; require zero legacy passwords among retained accounts and review the one permitted unlinked, unreferenced account before removal.
 5. Deploy one machine first. Startup applies pending migrations before opening the HTTP port.
 6. Verify `/api/health`, `/api/ready`, an existing campaign, an existing board, and the expected rows in `schema_migrations`.
 7. Only then continue normal traffic and client deployment.

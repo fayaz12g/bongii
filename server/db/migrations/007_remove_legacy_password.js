@@ -2,6 +2,39 @@ const up = async (connection) => {
   const columns = await connection.all('PRAGMA table_info(users)');
   if (!columns.some((column) => column.name === 'password')) return;
 
+  const removableAccounts = await connection.all(`
+    SELECT users.id
+    FROM users
+    WHERE (firebaseUid IS NULL OR TRIM(firebaseUid) = '')
+      AND NOT EXISTS (
+        SELECT 1 FROM campaigns WHERE campaigns.createdBy = users.id
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM playerBoards WHERE playerBoards.userId = users.id
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM campaignCategoryItems
+        WHERE campaignCategoryItems.decidedBy = users.id
+      )
+      AND NOT EXISTS (
+        SELECT 1 FROM campaignResults WHERE campaignResults.finalizedBy = users.id
+      )
+  `);
+  if (removableAccounts.length > 1) {
+    throw new Error(
+      `Cannot automatically remove ${removableAccounts.length} unlinked accounts without data references`,
+    );
+  }
+  if (removableAccounts.length === 1) {
+    const deletion = await connection.run(
+      'DELETE FROM users WHERE id = ?',
+      [removableAccounts[0].id],
+    );
+    if (deletion.changes !== 1) {
+      throw new Error('Unable to remove the unlinked account safely');
+    }
+  }
+
   const readiness = await connection.get(`
     SELECT
       SUM(CASE WHEN password IS NOT NULL AND TRIM(password) != '' THEN 1 ELSE 0 END)

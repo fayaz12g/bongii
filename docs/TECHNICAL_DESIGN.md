@@ -151,7 +151,7 @@ photoUrl TEXT,
 legacyUsername TEXT
 ```
 
-The Firebase UID is the external identity key. Email is profile data and must not be used as a foreign key because it can change. Migration `007_remove_legacy_password.js` removes local password storage only after verifying that every account is Firebase-linked and password-free.
+The Firebase UID is the external identity key. Email is profile data and must not be used as a foreign key because it can change. Migration `007_remove_legacy_password.js` removes local password storage only after verifying that every retained account is Firebase-linked and password-free. It may first remove one unlinked legacy account only when no campaign, board, outcome, or finalization record references it.
 
 ## Lifecycle service
 

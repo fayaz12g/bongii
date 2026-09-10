@@ -53,7 +53,7 @@ Enter service-account values directly in Fly's secret management UI or CLI. Do n
 
 Firebase Authentication owns credentials. SQLite retains a profile row keyed by `firebaseUid`, and campaigns continue to reference that row's integer `id`. On an authenticated request, the API updates the profile's verified email, display name, and approved Google photo URL.
 
-The production account migration completed on 2026-09-10. Migration `007_remove_legacy_password.js` refuses to run unless every local account has a Firebase UID and no password value. It then removes the password column while preserving user IDs and campaign ownership.
+The production account migration completed on 2026-09-10. Migration `007_remove_legacy_password.js` requires every retained local account to have a Firebase UID and no password value. It may remove one unlinked legacy account only when no campaign, signed-in board, outcome decision, or finalization references that account; multiple candidates or any referenced account stop the migration. It then removes the password column while preserving the remaining user IDs and campaign ownership.
 
 Run `npm run auth:audit` from `server/` against the intended database to print aggregate account-linking counts without account details. Ambiguous email matches still return `409` for manual recovery rather than linking automatically.
 

@@ -89,7 +89,9 @@ test('migrates a legacy schema once without losing campaign data', async () => {
         UNIQUE(boardId, position)
       );
       INSERT INTO users (username, password, firstName, lastName)
-      VALUES ('legacy', 'plaintext', 'Legacy', 'Owner');
+      VALUES
+        ('legacy', 'plaintext', 'Legacy', 'Owner'),
+        ('unused', 'plaintext', 'Unused', 'Account');
       INSERT INTO campaigns
         (code, title, backgroundPreset, boardSize, startDateTime, status, createdBy, createdAt)
       VALUES
@@ -118,6 +120,13 @@ test('migrates a legacy schema once without losing campaign data', async () => {
       'SELECT id FROM schema_migrations ORDER BY id',
     );
     assert.equal(beforeAccountMigration.at(-1).id, '006_clear_pending_outcome_dates.js');
+    const usersBeforeAccountMigration = await prepared.all(
+      'SELECT username FROM users ORDER BY id',
+    );
+    assert.deepEqual(usersBeforeAccountMigration, [
+      { username: 'legacy' },
+      { username: 'unused' },
+    ]);
     await prepared.run(
       'UPDATE users SET firebaseUid = ?, password = NULL WHERE id = 1',
       ['firebase-legacy-owner'],
@@ -214,6 +223,10 @@ test('migrates a legacy schema once without losing campaign data', async () => {
       photoUrl: null,
       legacyUsername: 'legacy',
     });
+    const migratedUsers = await database.connection.all(
+      'SELECT id, username FROM users ORDER BY id',
+    );
+    assert.deepEqual(migratedUsers, [{ id: 1, username: 'legacy' }]);
     const userColumns = await database.connection.all('PRAGMA table_info(users)');
     assert.equal(userColumns.some((column) => column.name === 'password'), false);
     assert.equal(campaign.createdBy, 1);
