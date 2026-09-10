@@ -12,9 +12,9 @@
       "expected": { "longestRun": 1, "completedLineCount": 0, "matchedTileCount": 1 }
     },
     {
-      "name": "4 by 4 center free space with all other tiles red",
+      "name": "4 by 4 board with all tiles red",
       "boardSize": 4,
-      "expected": { "longestRun": 1, "completedLineCount": 0, "matchedTileCount": 1 }
+      "expected": { "longestRun": 0, "completedLineCount": 0, "matchedTileCount": 0 }
     },
     {
       "name": "5 by 5 center free space with all other tiles red",
@@ -64,28 +64,28 @@
       "expected": { "longestRun": 3, "completedLineCount": 1, "matchedTileCount": 3 }
     },
     {
-      "name": "4 by 4 free-space row",
+      "name": "4 by 4 row",
       "boardSize": 4,
-      "happenedPositions": [9, 10, 11],
+      "happenedPositions": [8, 9, 10, 11],
       "expected": { "longestRun": 4, "completedLineCount": 1, "matchedTileCount": 4 }
     },
     {
-      "name": "4 by 4 free-space column",
+      "name": "4 by 4 column",
       "boardSize": 4,
-      "happenedPositions": [0, 4, 12],
+      "happenedPositions": [0, 4, 8, 12],
       "expected": { "longestRun": 4, "completedLineCount": 1, "matchedTileCount": 4 }
     },
     {
       "name": "4 by 4 primary diagonal",
       "boardSize": 4,
       "happenedPositions": [0, 5, 10, 15],
-      "expected": { "longestRun": 4, "completedLineCount": 1, "matchedTileCount": 5 }
+      "expected": { "longestRun": 4, "completedLineCount": 1, "matchedTileCount": 4 }
     },
     {
       "name": "4 by 4 anti-diagonal",
       "boardSize": 4,
       "happenedPositions": [3, 6, 9, 12],
-      "expected": { "longestRun": 4, "completedLineCount": 1, "matchedTileCount": 5 }
+      "expected": { "longestRun": 4, "completedLineCount": 1, "matchedTileCount": 4 }
     },
     {
       "name": "5 by 5 center row",
@@ -121,7 +121,7 @@
       "name": "completed 4 by 4 column",
       "boardSize": 4,
       "happenedPositions": [1, 5, 9, 13],
-      "expected": { "longestRun": 4, "completedLineCount": 1, "matchedTileCount": 5 }
+      "expected": { "longestRun": 4, "completedLineCount": 1, "matchedTileCount": 4 }
     },
     {
       "name": "completed 5 by 5 primary diagonal",

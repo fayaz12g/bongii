@@ -2,6 +2,7 @@
 "use client";
 import { createContext, useContext, useEffect, useState, useSyncExternalStore } from "react";
 import { MotionConfig } from "framer-motion";
+import { usePathname } from "next/navigation";
 
 const BackgroundContext = createContext();
 const MOTION_STORAGE_KEY = "bongii-reduce-motion";
@@ -38,8 +39,15 @@ export const BackgroundProvider = ({ children, selectedPreset: initialPreset }) 
 
   const [showDots, setShowDots] = useState(true);
   const [showGradient, setShowGradient] = useState(true);
-  const [selectedPreset, setSelectedPreset] = useState(initialPreset || backgroundPresets[0]);
+  const [chosenPreset, setSelectedPreset] = useState(initialPreset || backgroundPresets[0]);
+  const pathname = usePathname();
   const reduceMotion = useSyncExternalStore(subscribeToMotion, getMotionSnapshot, () => false);
+  const keepsChosenPreset = pathname === "/"
+    || pathname === "/home"
+    || pathname === "/create"
+    || /^\/(?:boards|leaderboards|moderate)\/[A-Z]{4}$/.test(pathname)
+    || /^\/[A-Z]{4}$/.test(pathname);
+  const selectedPreset = keepsChosenPreset ? chosenPreset : backgroundPresets[0];
 
   useEffect(() => {
     document.documentElement.dataset.reduceMotion = String(reduceMotion);

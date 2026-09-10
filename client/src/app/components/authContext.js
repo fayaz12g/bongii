@@ -15,6 +15,11 @@ import {
 import { createContext, useContext, useEffect, useState } from "react";
 import { profileService } from "../services/profileService";
 import { getFirebaseAuth, getFirebaseConfigurationError } from "../utils/firebase";
+import {
+  clearPendingProfileAvatar,
+  readPendingProfileAvatar,
+  rememberPendingProfileAvatar,
+} from "../utils/profileAvatars.mjs";
 
 const AuthContext = createContext(null);
 const configurationError = getFirebaseConfigurationError();
@@ -26,10 +31,21 @@ const readError = async (response) => {
   return data.error || "Authentication could not be completed";
 };
 
-const loadLocalProfile = async () => {
+const loadLocalProfile = async (user) => {
   const response = await profileService.getUserData();
   if (!response.ok) throw new Error(await readError(response));
-  return response.json();
+  let profile = await response.json();
+  const pendingProfileIcon = readPendingProfileAvatar(window.localStorage, user.uid);
+  if (!pendingProfileIcon) return profile;
+
+  const update = await profileService.updateUserData({
+    displayName: profile.displayName,
+    profileIcon: pendingProfileIcon,
+  });
+  if (!update.ok) throw new Error(await readError(update));
+  profile = await update.json();
+  clearPendingProfileAvatar(window.localStorage);
+  return profile;
 };
 
 export function AuthProvider({ children }) {
@@ -52,7 +68,7 @@ export function AuthProvider({ children }) {
       }
 
       try {
-        const nextProfile = await loadLocalProfile();
+        const nextProfile = await loadLocalProfile(nextUser);
         if (active) setProfile(nextProfile);
       } catch (error) {
         if (active) {
@@ -73,7 +89,7 @@ export function AuthProvider({ children }) {
   const syncProfile = async (user) => {
     if (!user.emailVerified) return null;
     await user.getIdToken(true);
-    const nextProfile = await loadLocalProfile();
+    const nextProfile = await loadLocalProfile(user);
     setFirebaseUser(user);
     setProfile(nextProfile);
     setAuthError("");
@@ -105,9 +121,10 @@ export function AuthProvider({ children }) {
     }
   };
 
-  const registerWithEmail = async ({ displayName, email, password, returnTo }) => {
+  const registerWithEmail = async ({ displayName, email, password, profileIcon, returnTo }) => {
     const credential = await createUserWithEmailAndPassword(getFirebaseAuth(), email, password);
     await updateFirebaseProfile(credential.user, { displayName });
+    rememberPendingProfileAvatar(window.localStorage, credential.user.uid, profileIcon);
     await sendEmailVerification(
       credential.user,
       actionUrl(`/verify-email?returnTo=${encodeURIComponent(returnTo)}`),
@@ -144,6 +161,12 @@ export function AuthProvider({ children }) {
     await firebaseUser.getIdToken(true);
   };
 
+  const updatePhotoUrl = async (photoURL) => {
+    if (!firebaseUser) throw new Error("Authentication required");
+    await updateFirebaseProfile(firebaseUser, { photoURL });
+    await firebaseUser.getIdToken(true);
+  };
+
   const signOut = async () => {
     await firebaseSignOut(getFirebaseAuth());
     setFirebaseUser(null);
@@ -166,6 +189,7 @@ export function AuthProvider({ children }) {
       signOut,
       syncProfile,
       updateDisplayName,
+      updatePhotoUrl,
     }}>
       {children}
     </AuthContext.Provider>

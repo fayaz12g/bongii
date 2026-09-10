@@ -33,6 +33,14 @@ Boards rank lexicographically by longest run, then completed lines, then matched
 
 Scoring rules are versioned. Finalization resolves pending outcomes, scores every board, writes campaign and board snapshots, and changes campaign state in one `BEGIN IMMEDIATE` transaction. Repeating finalization returns the existing snapshots rather than recalculating them.
 
+## Double or Nothing tokens
+
+Each account starts with 10 tokens. Creating a campaign spends 10 tokens, while creating a Double or Nothing board spends one token and permits exactly one campaign item to appear in two board positions. Anonymous boards cannot spend or receive tokens. Development environments can enable the profile's mock purchase confirmation to add 100 tokens without collecting payment data or making a charge.
+
+When a campaign is finalized, each signed-in board receives $\lfloor N / rank \rfloor$ tokens, where $N$ is the total number of submitted boards, including anonymous submissions. With three boards, ranks 1, 2, and 3 receive 3, 1, and 1 tokens. Every board at a shared rank receives the full award for that rank. If one account owns multiple ranked boards, its awards are added together.
+
+Awards are stored with result snapshots and balances are updated in the same finalization transaction. Repeated or concurrent finalization requests return the existing result and never award tokens twice.
+
 ## Release verification
 
 Before a public event:

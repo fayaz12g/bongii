@@ -27,9 +27,10 @@ Every response includes `X-Request-Id`. Error bodies use `{ "error": "message" }
 | --- | --- | --- | --- |
 | `GET` | `/api/users/current` | Firebase | Synchronize and return the current local profile |
 | `PUT` | `/api/users/current` | Firebase | Update `{ displayName, profileIcon? }` |
+| `POST` | `/api/users/current/debug-token-purchase` | Firebase, debug only | Add 100 mock tokens; accepts no request fields or payment data |
 | `GET` | `/api/users` | Firebase | Return public profile fields for local users |
 
-`POST /api/users` and `POST /api/login` no longer exist. Password registration, sign-in, verification, reset, and provider linking are Firebase client operations.
+`GET /api/users/current` includes `doubleOrNothingCredits`, the account's current token balance. `profileIcon` is one of `chippy-1` through `chippy-8` or `lucky-1` through `lucky-8`; a validated Google `photoUrl` takes visual precedence until the user selects a character avatar. `POST /api/users` and `POST /api/login` no longer exist. Password registration, sign-in, verification, reset, and provider linking are Firebase client operations.
 
 ## Campaigns and boards
 
@@ -38,7 +39,7 @@ Every response includes `X-Request-Id`. Error bodies use `{ "error": "message" }
 | `GET` | `/api/campaigns?group=&query=` | Public | Browse `open`, `awaiting`, or `results` campaigns |
 | `GET` | `/api/campaigns/:code` | Public | Read a public campaign snapshot |
 | `GET` | `/api/campaigns/validate/:code` | Public | Validate a public campaign code |
-| `POST` | `/api/campaigns` | Firebase | Create a draft campaign |
+| `POST` | `/api/campaigns` | Firebase | Spend 10 tokens and create a draft campaign atomically |
 | `POST` | `/api/campaigns/:code/board` | Public | Submit a complete board while entries are open |
 | `GET` | `/api/campaigns/:code/boards` | Public | List submitted boards for a public campaign |
 | `GET` | `/api/boards/:boardCode` | Public | Read an authoritative board snapshot |
@@ -48,7 +49,7 @@ Every response includes `X-Request-Id`. Error bodies use `{ "error": "message" }
 | `GET` | `/api/moderate/campaigns/:code` | Firebase | Read owner details and allowed actions |
 | `DELETE` | `/api/campaigns/:code` | Firebase owner | Delete a non-completed campaign |
 
-A campaign create body contains `title`, optional `description`, `backgroundPreset`, `boardSize` (`3`, `4`, or `5`), `startDateTime`, and one or more categories. A board body contains `playerName` and exactly one tile per board position; the center tile has no category item.
+A campaign create body contains `title`, optional `description`, `backgroundPreset`, `boardSize` (`3`, `4`, or `5`), `startDateTime`, and one or more categories. A board body contains `playerName` and exactly one tile per board position; the center tile has no category item. Setting `useDoubleOrNothing` to `true` permits exactly one campaign item to occupy two positions. This requires Firebase authentication, spends one of the account's 10 initial tokens atomically with board creation, and returns `remainingDoubleOrNothingCredits`. A board can spend at most one token.
 
 ## Lifecycle and outcomes
 
@@ -62,7 +63,7 @@ A campaign create body contains `title`, optional `description`, `backgroundPres
 | `POST` | `/api/campaigns/:code/finalize` | Atomically score and complete a moderating campaign |
 | `POST` | `/api/campaigns/:code/items/:itemId/outcome` | Set `{ status }` to `pending`, `happened`, or `did_not_happen` |
 
-All lifecycle and outcome writes require the Firebase-authenticated campaign owner. Responses include the authoritative campaign version. Finalization is idempotent.
+All lifecycle and outcome writes require the Firebase-authenticated campaign owner. Responses include the authoritative campaign version. Finalization is idempotent. Each signed-in board receives $\lfloor N / rank \rfloor$ Double or Nothing tokens, where $N$ is the total submitted board count, including anonymous boards. Shared ranks each receive the full rank award. Public result rows expose the persisted amount as `creditsAwarded`; anonymous boards receive zero.
 
 ## Socket.IO
 

@@ -7,7 +7,8 @@
     "start:playwright": "node scripts/start-playwright.js",
     "test": "node --test test/*.test.js",
     "db:migrate": "node scripts/migrate.js",
-    "auth:audit": "node scripts/audit-auth-users.js"
+    "auth:audit": "node scripts/audit-auth-users.js",
+    "boards:audit-4x4": "node scripts/audit-four-by-four-boards.js"
   },
   "author": "",
   "license": "ISC",

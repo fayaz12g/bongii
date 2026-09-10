@@ -1,11 +1,20 @@
 const express = require('express');
-const { asyncRoute, createAuthMiddleware, publicUser } = require('./auth');
+const {
+  asyncRoute,
+  createAuthMiddleware,
+  createOptionalAuthMiddleware,
+  publicUser,
+} = require('./auth');
+const { createEditToken, hashEditToken } = require('./boardAccess');
+const { createBoardCreationRateLimit } = require('./boardCreationRateLimit');
 const { CampaignLifecycle, withAllowedActions } = require('./campaignLifecycle');
 const { schemas, validateBody } = require('./validation');
 
 const createRouter = ({ database, config, campaignEvents, firebaseTokenVerifier, metrics }) => {
   const router = express.Router();
   const requireAuth = createAuthMiddleware(database, firebaseTokenVerifier);
+  const optionalAuth = createOptionalAuthMiddleware(database, firebaseTokenVerifier);
+  const limitBoardCreation = createBoardCreationRateLimit();
   const lifecycle = new CampaignLifecycle(database);
 
   router.get('/health', (req, res) => {
@@ -37,6 +46,19 @@ const createRouter = ({ database, config, campaignEvents, firebaseTokenVerifier,
   router.put('/users/current', requireAuth, validateBody(schemas.profile), asyncRoute(async (req, res) => {
     const user = await database.updateUserProfile(req.user.id, req.validatedBody);
     res.json(publicUser(user));
+  }));
+
+  router.post('/users/current/debug-token-purchase', requireAuth, validateBody(schemas.debugTokenPurchase), asyncRoute(async (req, res) => {
+    if (config.enableDebugTokenPurchase === false) {
+      res.status(404).json({ error: 'Not found' });
+      return;
+    }
+    const user = await database.grantDebugTokens(req.user.id);
+    res.json({
+      success: true,
+      tokensAdded: 100,
+      doubleOrNothingCredits: user.doubleOrNothingCredits,
+    });
   }));
 
   router.get('/campaigns', asyncRoute(async (req, res) => {
@@ -79,18 +101,31 @@ const createRouter = ({ database, config, campaignEvents, firebaseTokenVerifier,
   }));
 
   router.post('/campaigns', requireAuth, validateBody(schemas.campaign), asyncRoute(async (req, res) => {
-    const campaign = await database.createCampaign({
+    const created = await database.createCampaign({
       ...req.validatedBody,
       createdBy: req.user.id,
     });
-    res.status(201).json({ success: true, campaign: withAllowedActions(campaign) });
+    const { remainingDoubleOrNothingCredits, ...campaign } = created;
+    res.status(201).json({
+      success: true,
+      campaign: withAllowedActions(campaign),
+      remainingDoubleOrNothingCredits,
+    });
   }));
 
-  router.post('/campaigns/:code/board', validateBody(schemas.board), asyncRoute(async (req, res) => {
-    const board = await database.createPlayerBoard(req.params.code, req.validatedBody);
+  router.post('/campaigns/:code/board', limitBoardCreation, optionalAuth, validateBody(schemas.board), asyncRoute(async (req, res) => {
+    const editToken = req.user ? null : createEditToken();
+    const board = await database.createPlayerBoard(req.params.code, req.validatedBody, {
+      userId: req.user?.id || null,
+      editTokenHash: editToken ? hashEditToken(editToken) : null,
+    });
     res.status(201).json({
       success: true,
       boardCode: board.boardCode,
+      ...(editToken ? { editToken } : {}),
+      ...(board.remainingDoubleOrNothingCredits !== undefined
+        ? { remainingDoubleOrNothingCredits: board.remainingDoubleOrNothingCredits }
+        : {}),
       message: 'Board created successfully',
     });
   }));
@@ -120,13 +155,25 @@ const createRouter = ({ database, config, campaignEvents, firebaseTokenVerifier,
     res.json(results);
   }));
 
-  router.get('/boards/:boardCode', asyncRoute(async (req, res) => {
+  router.get('/boards/:boardCode', optionalAuth, asyncRoute(async (req, res) => {
     const board = await database.getPlayerBoardByCode(req.params.boardCode);
     if (!board) {
       res.status(404).json({ error: 'Board not found' });
       return;
     }
-    res.json(board);
+    const canEdit = await database.canEditPlayerBoard(req.params.boardCode, {
+      userId: req.user?.id || null,
+      editToken: req.get('X-Board-Edit-Token'),
+    });
+    res.json({ ...board, canEdit: canEdit && board.campaignStatus === 'open' });
+  }));
+
+  router.put('/boards/:boardCode', optionalAuth, validateBody(schemas.boardUpdate), asyncRoute(async (req, res) => {
+    const board = await database.updatePlayerBoard(req.params.boardCode, req.validatedBody, {
+      userId: req.user?.id || null,
+      editToken: req.get('X-Board-Edit-Token'),
+    });
+    res.json({ success: true, board });
   }));
 
   const transitionCampaign = (action) => asyncRoute(async (req, res) => {

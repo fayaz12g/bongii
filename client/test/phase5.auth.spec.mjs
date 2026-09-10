@@ -6,27 +6,34 @@ import {
   getOutOfBandCodes,
 } from "./firebaseAuthFixture.mjs";
 
-const profile = {
+const initialProfile = {
   id: 1,
   username: "moderator",
   displayName: "Test Moderator",
   email: "moderator@example.com",
-  profileIcon: "1",
+  profileIcon: "chippy-1",
   photoUrl: null,
 };
 
 test.beforeEach(async ({ page, request }) => {
   await clearAuthUsers(request);
-  await page.route("**/api/users/current", (route) => route.fulfill({
-    status: 200,
-    contentType: "application/json",
-    body: JSON.stringify(profile),
-  }));
+  let profile = { ...initialProfile };
+  await page.route("**/api/users/current", async (route) => {
+    if (route.request().method() === "PUT") {
+      profile = { ...profile, ...route.request().postDataJSON() };
+    }
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(profile),
+    });
+  });
 });
 
 test("registers, verifies email, and preserves the return path", async ({ page, request }) => {
   await page.goto("/register?returnTo=%2Fprofile");
   await page.getByLabel("Display name").fill("New Moderator");
+  await page.getByRole("button", { name: "Lucky 4" }).click();
   await page.getByLabel("Email").fill("new@example.com");
   await page.getByLabel("Password", { exact: true }).fill("secure-password");
   await page.getByLabel("Confirm password").fill("secure-password");
@@ -41,6 +48,7 @@ test("registers, verifies email, and preserves the return path", async ({ page, 
   await confirmEmailVerification(request, verification.oobCode);
   await page.getByRole("button", { name: "I've verified my email" }).click();
   await expect(page).toHaveURL(/\/profile$/);
+  await expect(page.getByRole("button", { name: "Lucky 4" })).toHaveAttribute("aria-pressed", "true");
 });
 
 test("signs in with email and preserves the return path", async ({ page, request }) => {

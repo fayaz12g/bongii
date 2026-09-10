@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   applyBoardOutcome,
   classifyCampaignVersion,
+  getBongAnnouncement,
   getCompletedLines,
   getCompletedLinePositions,
   shouldRefreshAfterJoin,
@@ -134,4 +135,27 @@ test("returns no completed positions when a line contains an empty tile", () => 
     })],
     [],
   );
+});
+
+test("does not treat a flagged position as free on a 4 by 4 board", () => {
+  const tiles = Array.from({ length: 16 }, (_, position) => ({
+    position,
+    isCenter: position === 8,
+    outcome: { status: position === 8 ? "pending" : "happened" },
+  }));
+
+  assert.equal(getCompletedLines({ boardSize: 4, tiles }).length, 8);
+});
+
+test("announces only newly completed lines from one live consecutive version", () => {
+  const snapshotAt = (campaignVersion, completedLineCount) => ({
+    campaignVersion,
+    currentScore: { completedLineCount },
+  });
+
+  assert.equal(getBongAnnouncement(snapshotAt(4, 0), snapshotAt(5, 1), { live: true }), "Bong!");
+  assert.equal(getBongAnnouncement(snapshotAt(5, 1), snapshotAt(6, 3), { live: true }), "Double Bong!");
+  assert.equal(getBongAnnouncement(snapshotAt(6, 3), snapshotAt(7, 2), { live: true }), null);
+  assert.equal(getBongAnnouncement(snapshotAt(4, 0), snapshotAt(6, 2), { live: true }), null);
+  assert.equal(getBongAnnouncement(snapshotAt(4, 0), snapshotAt(5, 1)), null);
 });

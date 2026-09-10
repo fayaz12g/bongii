@@ -4,8 +4,15 @@
       "host": "127.0.0.1",
       "port": 44099
     },
+    "storage": {
+      "host": "127.0.0.1",
+      "port": 44199
+    },
     "ui": {
       "enabled": false
     }
+  },
+  "storage": {
+    "rules": "storage.rules"
   }
 }

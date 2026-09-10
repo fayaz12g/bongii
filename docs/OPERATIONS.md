@@ -14,6 +14,7 @@ This runbook covers the Phase 0 configuration, SQLite migrations, backup checks,
 | `FIREBASE_CLIENT_EMAIL` | Conditional | Service-account email | Set together with the private key outside the emulator |
 | `FIREBASE_PRIVATE_KEY` | Conditional | Service-account private key | Fly secret; escaped `\n` sequences are supported |
 | `FIREBASE_AUTH_EMULATOR_HOST` | No | `127.0.0.1:9099` | Uses the local Auth emulator; never set in production |
+| `ENABLE_DEBUG_TOKEN_PURCHASE` | No | `true` locally | Enables the bodyless +100-token mock grant; defaults off in production |
 | `CLIENT_ORIGINS` | No | `http://localhost:3001,https://bongii.fayaz.one,https://bongii-git-feature-account.vercel.app` | Exact comma-separated browser origins allowed by REST and Socket.IO CORS |
 
 `CLIENT_ORIGINS` accepts origins only: scheme, hostname, and optional non-default port. Wildcards, paths, and trailing slashes fail startup validation. Keep `http://localhost:3001` for local development, list the production Vercel/custom domain, and add the exact `https://${VERCEL_URL}` value for each active Vercel preview deployment. Remove stale preview origins after testing.
@@ -27,9 +28,15 @@ This runbook covers the Phase 0 configuration, SQLite migrations, backup checks,
 | `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN` | Yes for Firebase | `project.firebaseapp.com` | Firebase Auth domain |
 | `NEXT_PUBLIC_FIREBASE_PROJECT_ID` | Yes for Firebase | `bongii-production` | Must match the API project ID |
 | `NEXT_PUBLIC_FIREBASE_APP_ID` | Yes for Firebase | Firebase Web app value | Public Firebase app identifier |
+| `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` | When uploads enabled | `bongii-production.firebasestorage.app` | Firebase Storage bucket used for profile avatars |
+| `NEXT_PUBLIC_ENABLE_AVATAR_UPLOAD` | No | `false` | Enables upload controls only after the Storage rollout checklist passes |
+| `NEXT_PUBLIC_ENABLE_DEBUG_TOKEN_PURCHASE` | No | `true` locally | Shows the mock +100-token profile action; defaults off in production |
 | `NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST` | No | `127.0.0.1:9099` | Local development only |
+| `NEXT_PUBLIC_FIREBASE_STORAGE_EMULATOR_HOST` | No | `127.0.0.1:9199` | Local development only |
 
 The source default is `http://localhost:3000`, so an unconfigured local build cannot silently write to production. Set the production value in Vercel for Production and Preview environments as appropriate.
+
+The mock token purchase route and profile button collect no payment fields and perform no charge. Keep both debug flags disabled in production unless a temporary controlled test explicitly requires them; remove this path when real billing is introduced.
 
 See [Firebase Authentication setup and rollout](FIREBASE_AUTH.md) for provider, authorized-domain, service-account, account-linking, and staged-release steps.
 
@@ -42,11 +49,12 @@ npm --prefix server ci
 npm --prefix client ci
 npm --prefix server run db:migrate
 npm --prefix server run auth:audit
+npm --prefix server run boards:audit-4x4
 ```
 
 The API also runs migrations before it starts listening.
 
-For emulator-backed browser tests, run `npm --prefix client run test:a11y`. Playwright starts the Firebase Auth emulator, an isolated API on test-only port `43900`, and Next.js on test-only port `43901`; it never uses the development or production database. The lifecycle journey opens three independent Chromium contexts: one moderator and two anonymous viewers. The API permits only the test client origin and removes its temporary database when the process stops.
+For emulator-backed browser tests, install JDK 21 or newer and run `npm --prefix client run test:a11y`. Playwright starts the Firebase Auth and Storage emulators, an isolated API on test-only port `43900`, and Next.js on test-only port `43901`; it never uses the development or production database. The lifecycle journey opens three independent Chromium contexts: one moderator and two anonymous viewers. The API permits only the test client origin and removes its temporary database when the process stops.
 
 ## Service probes
 
@@ -74,6 +82,24 @@ Fly scrapes `GET /api/metrics` in Prometheus format. The endpoint reports HTTP r
 - Each migration runs inside `BEGIN IMMEDIATE` and rolls back completely on error.
 - Foreign-key enforcement is enabled on every application and migration connection.
 - Migration `007_remove_legacy_password.js` refuses to run while any retained account lacks a Firebase UID or retains a password value. It can remove at most one unlinked account, and only when no campaign, signed-in board, outcome decision, or finalization references it.
+- Migration `008_board_edit_tokens.js` adds only the hashed anonymous edit-token field and an ownership index. Raw edit tokens exist only in the creating browser.
+- Migration `009_double_or_nothing.js` gives existing and new accounts 10 tokens and records whether a board spent one.
+- Migration `010_result_credit_awards.js` records each board's token award in the immutable final result snapshot.
+- Migration `011_profile_avatars.js` maps legacy profile icons to Chippy variants and defaults unknown or missing values to `chippy-1`.
+
+Before deploying the 4 by 4 rule correction, run `npm run boards:audit-4x4` against the backed-up target database. The command exits nonzero when an open, locked, or moderating 4 by 4 board contains a legacy center tile or lacks any of its 16 playable items. Resolve those campaigns explicitly before deployment. Completed rows are reported separately and must not be rewritten because their result snapshots retain their original `rulesVersion`; new finalizations use rules version 2.
+
+## Avatar Storage rollout
+
+Avatar uploads remain off unless `NEXT_PUBLIC_ENABLE_AVATAR_UPLOAD=true`. Before enabling them:
+
+1. Upgrade the Firebase project to Blaze, configure a monthly budget alert, and confirm the intended Storage bucket.
+2. Deploy `client/storage.rules`, then verify an authenticated user can write and delete only `avatars/{theirUid}/*`; anonymous and cross-user writes must fail.
+3. Verify JPEG, PNG, and WebP uploads at or below 2 MB. The client also rejects dimensions outside 128 through 4096 pixels.
+4. Review content-handling and support policy. Uploaded avatar URLs are public, while write/delete access remains owner-only.
+5. Set `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET` and enable the feature flag in one preview environment before production.
+
+Replacement deletes the superseded owned object after the new profile URL is active. Removal deletes the current object and restores the preset fallback. To stop new uploads without affecting existing images, set the feature flag to `false` and redeploy; to fully roll back, also restore the prior Storage rules after retaining or deleting existing objects according to the approved data-retention policy.
 
 Check a database without starting the API:
 
@@ -86,7 +112,7 @@ DATABASE_PATH=./data/bongii.db npm --prefix server run db:migrate
 1. Confirm the deployed app and volume: `fly status -a bongii` and `fly volumes list -a bongii`.
 2. Confirm `DATABASE_PATH=/data/test.db`. This is the historical production filename and must not be renamed as part of a schema release.
 3. Create a Fly volume snapshot and confirm it is listed. Follow the current [Fly volume snapshot documentation](https://fly.io/docs/volumes/volume-manage/#restore-a-volume-from-a-snapshot) because flyctl syntax can change.
-4. Record the snapshot ID, current image version, expected migration filenames, and current row counts. Before migration `007`, run `npm run auth:audit`; require zero legacy passwords among retained accounts and review the one permitted unlinked, unreferenced account before removal.
+4. Record the snapshot ID, current image version, expected migration filenames, and current row counts. Before migration `007`, run `npm run auth:audit`; require zero legacy passwords among retained accounts and review the one permitted unlinked, unreferenced account before removal. Before the Phase 7 client rollout, run `npm run boards:audit-4x4` and require zero active blockers.
 5. Deploy one machine first. Startup applies pending migrations before opening the HTTP port.
 6. Verify `/api/health`, `/api/ready`, an existing campaign, an existing board, and the expected rows in `schema_migrations`.
 7. Only then continue normal traffic and client deployment.

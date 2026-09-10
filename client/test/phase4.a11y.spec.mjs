@@ -129,13 +129,14 @@ test.beforeEach(async ({ page, request }) => {
   await clearAuthUsers(request);
   await page.route("**/api/**", (route) => {
     const url = new URL(route.request().url());
+    if (url.pathname === "/api/ready") return json(route, { status: "ready" });
     if (url.pathname === "/api/users/current") {
       return json(route, {
         id: 1,
         username: "moderator",
         displayName: "Test Moderator",
         email: "moderator@example.com",
-        profileIcon: "1",
+        profileIcon: "chippy-1",
         photoUrl: null,
       });
     }
@@ -208,6 +209,7 @@ test("reduced motion persists and suppresses home particles", async ({ page }) =
 
   await expect(page.locator("html")).toHaveAttribute("data-reduce-motion", "true");
   await expect(page.locator("canvas")).toHaveCount(0);
+  await page.getByRole("button", { name: "Open settings" }).click();
   const switchControl = page.getByRole("switch", { name: "Reduce motion" });
   await expect(switchControl).toBeChecked();
 
@@ -215,6 +217,7 @@ test("reduced motion persists and suppresses home particles", async ({ page }) =
   await expect(page.locator("html")).toHaveAttribute("data-reduce-motion", "false");
   await expect.poll(() => page.evaluate(() => localStorage.getItem("bongii-reduce-motion"))).toBe("false");
   await page.reload();
+  await page.getByRole("button", { name: "Open settings" }).click();
   await expect(page.getByRole("switch", { name: "Reduce motion" })).not.toBeChecked();
 });
 

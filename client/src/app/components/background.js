@@ -1,12 +1,14 @@
 import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import { useBackground } from "./context";
+import { isCampaignScopedPath } from "../utils/routeAppearance.mjs";
 
 const Background = ({}) => {
   const canvasRef = useRef(null);
   const pathname = usePathname();
   const { reduceMotion, showDots, showGradient, selectedPreset } = useBackground();
   const isHome = pathname === "/" || pathname === "/home";
+  const isCampaignRoute = isCampaignScopedPath(pathname);
   const showParticles = isHome && showDots && !reduceMotion;
 
   useEffect(() => {
@@ -189,7 +191,17 @@ const Background = ({}) => {
 
   return (
     <>
-      {!isHome && <div className="work-background fixed inset-0 -z-20" aria-hidden="true" />}
+      {!isHome && (
+        <>
+          <div className="work-background fixed inset-0 -z-20" aria-hidden="true" />
+          {isCampaignRoute && (
+            <div
+              className={`campaign-theme-band fixed inset-x-0 top-16 -z-10 h-44 bg-gradient-to-r ${selectedPreset?.gradient || "from-cyan-500 via-sky-600 to-rose-500"}`}
+              aria-hidden="true"
+            />
+          )}
+        </>
+      )}
       {isHome && showGradient && (
         <div
           className={`min-h-screen fixed inset-0 -z-20 bg-gradient-to-r ${

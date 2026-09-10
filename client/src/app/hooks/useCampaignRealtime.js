@@ -7,6 +7,7 @@ import {
   shouldRefreshAfterJoin,
 } from "../utils/campaignRealtime.mjs";
 import { getServerOrigin } from "../utils/config";
+import { apiReadiness } from "../utils/readiness.mjs";
 
 const OUTCOMES = new Set(["pending", "happened", "did_not_happen"]);
 const CAMPAIGN_STATUSES = new Set([
@@ -178,7 +179,13 @@ export const useCampaignRealtime = ({
       }
       if (event.campaignVersion > versionRef.current) requestRefresh();
     });
-    socket.connect();
+    apiReadiness.ensure()
+      .then(() => {
+        if (active) socket.connect();
+      })
+      .catch(() => {
+        if (active) setConnectionState("error");
+      });
 
     return () => {
       active = false;
@@ -196,7 +203,9 @@ export const useCampaignRealtime = ({
     if (!socket) return;
     if (socket.connected) socket.disconnect();
     setConnectionState("connecting");
-    socket.connect();
+    apiReadiness.retry().then(() => socket.connect()).catch(() => {
+      setConnectionState("error");
+    });
   };
 
   return { connectionState, reconnect };

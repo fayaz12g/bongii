@@ -2,8 +2,13 @@ const crypto = require('crypto');
 const { configureConnection, openConnection } = require('./connection');
 const { migrate } = require('./migrate');
 const { RULES_VERSION, rankBoards, scoreBoard } = require('../scoring');
+const { freeCenterPosition, hasFreeCenter } = require('../boardRules');
+const { matchesEditToken } = require('../boardAccess');
+const { DEFAULT_PROFILE_AVATAR_ID } = require('../profileAvatars');
 
 const RESULTS_PAGE_SIZE = 20;
+const CAMPAIGN_CREATION_COST = 10;
+const DEBUG_TOKEN_GRANT = 100;
 const BROWSE_GROUP_STATUSES = Object.freeze({
   open: ['open'],
   awaiting: ['locked', 'moderating'],
@@ -18,12 +23,24 @@ const cleanText = (value, maximum) => {
   return cleaned ? cleaned.slice(0, maximum) : null;
 };
 
-const safeGooglePhotoUrl = (value) => {
+const safeProfilePhotoUrl = (value, firebaseUid) => {
   try {
     const parsed = new URL(value);
-    if (parsed.protocol !== 'https:'
-      || (parsed.hostname !== 'googleusercontent.com'
-        && !parsed.hostname.endsWith('.googleusercontent.com'))) return null;
+    const storageEmulatorHost = process.env.FIREBASE_STORAGE_EMULATOR_HOST;
+    const isStorageEmulator = Boolean(storageEmulatorHost)
+      && parsed.protocol === 'http:'
+      && parsed.host === storageEmulatorHost;
+    if (parsed.protocol !== 'https:' && !isStorageEmulator) return null;
+    if (parsed.hostname === 'googleusercontent.com'
+      || parsed.hostname.endsWith('.googleusercontent.com')) {
+      return parsed.toString().slice(0, 2048);
+    }
+    if (parsed.hostname !== 'firebasestorage.googleapis.com' && !isStorageEmulator) return null;
+    const objectMarker = '/o/';
+    const markerIndex = parsed.pathname.indexOf(objectMarker);
+    if (markerIndex === -1) return null;
+    const objectPath = decodeURIComponent(parsed.pathname.slice(markerIndex + objectMarker.length));
+    if (!objectPath.startsWith(`avatars/${firebaseUid}/`)) return null;
     return parsed.toString().slice(0, 2048);
   } catch {
     return null;
@@ -41,6 +58,81 @@ const generateCode = () => {
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
   const bytes = crypto.randomBytes(4);
   return Array.from(bytes, (byte) => alphabet[byte % alphabet.length]).join('');
+};
+
+const validateBoardTiles = async (
+  connection,
+  campaign,
+  selectedTiles,
+  { allowSingleDuplicate = false, requireSingleDuplicate = false } = {},
+) => {
+  const expectedTileCount = campaign.boardSize * campaign.boardSize;
+  if (selectedTiles.length !== expectedTileCount) {
+    throw new DomainError(`Board must contain ${expectedTileCount} tiles`);
+  }
+
+  const positions = new Set(selectedTiles.map((tile) => tile.position));
+  if (positions.size !== expectedTileCount
+    || Math.min(...positions) !== 0
+    || Math.max(...positions) !== expectedTileCount - 1) {
+    throw new DomainError('Board positions must be unique and contiguous');
+  }
+
+  const centerTiles = selectedTiles.filter((tile) => tile.isCenter);
+  if (hasFreeCenter(campaign.boardSize)
+    && (centerTiles.length !== 1
+      || centerTiles[0].position !== freeCenterPosition(campaign.boardSize))) {
+    throw new DomainError('Board must contain one center tile in the center position');
+  }
+  if (!hasFreeCenter(campaign.boardSize) && centerTiles.length !== 0) {
+    throw new DomainError('Even-sized boards cannot contain a center tile');
+  }
+
+  const itemIds = selectedTiles
+    .filter((tile) => !tile.isCenter)
+    .map((tile) => tile.categoryItemId);
+  if (itemIds.some((itemId) => itemId === null || itemId === undefined)) {
+    throw new DomainError('Playable board tiles must contain campaign items');
+  }
+  const itemCounts = new Map();
+  itemIds.forEach((itemId) => itemCounts.set(itemId, (itemCounts.get(itemId) || 0) + 1));
+  const repeatedCounts = [...itemCounts.values()].filter((count) => count > 1);
+  const hasSingleDuplicate = repeatedCounts.length === 1 && repeatedCounts[0] === 2;
+  if (repeatedCounts.length > 0 && (!allowSingleDuplicate || !hasSingleDuplicate)) {
+    throw new DomainError('Playable board tiles must contain unique campaign items');
+  }
+  if (requireSingleDuplicate && !hasSingleDuplicate) {
+    throw new DomainError('Double or Nothing must duplicate exactly one campaign item once');
+  }
+
+  const allowedItems = await connection.all(
+    `SELECT cci.id
+     FROM campaignCategoryItems cci
+     JOIN campaignCategories cc ON cc.id = cci.categoryId
+     WHERE cc.campaignId = ?`,
+    [campaign.id],
+  );
+  const allowedItemIds = new Set(allowedItems.map((item) => item.id));
+  if (itemIds.some((itemId) => !allowedItemIds.has(itemId))) {
+    throw new DomainError('Board contains an item from another campaign');
+  }
+};
+
+const insertBoardTiles = async (connection, boardId, selectedTiles) => {
+  for (const tile of selectedTiles) {
+    await connection.run(
+      `INSERT INTO playerBoardTiles
+        (boardId, categoryItemId, position, isCenter, customText)
+       VALUES (?, ?, ?, ?, ?)`,
+      [
+        boardId,
+        tile.isCenter ? null : tile.categoryItemId,
+        tile.position,
+        tile.isCenter ? 1 : 0,
+        tile.customText || null,
+      ],
+    );
+  }
 };
 
 const toPublicCampaign = ({ createdBy, ...campaign }) => ({
@@ -112,7 +204,7 @@ class BongiiDatabase {
     const displayName = cleanText(identity.displayName, 160)
       || email?.split('@')[0]
       || 'Bongii user';
-    const photoUrl = safeGooglePhotoUrl(identity.photoUrl);
+    const photoUrl = safeProfilePhotoUrl(identity.photoUrl, firebaseUid);
     if (!firebaseUid || !email || identity.emailVerified !== true) {
       throw new DomainError('A verified Firebase identity is required', 403);
     }
@@ -171,8 +263,16 @@ class BongiiDatabase {
       const result = await connection.run(
         `INSERT INTO users
           (firebaseUid, displayName, email, photoUrl, firstName, lastName, profileIcon)
-         VALUES (?, ?, ?, ?, ?, ?, '1')`,
-        [firebaseUid, displayName, email, photoUrl, firstName, lastName],
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          firebaseUid,
+          displayName,
+          email,
+          photoUrl,
+          firstName,
+          lastName,
+          DEFAULT_PROFILE_AVATAR_ID,
+        ],
       );
       return connection.get('SELECT * FROM users WHERE id = ?', [result.lastID]);
     });
@@ -194,7 +294,7 @@ class BongiiDatabase {
         `UPDATE users
          SET displayName = ?, firstName = ?, lastName = ?, profileIcon = ?
          WHERE id = ?`,
-        [displayName, firstName, lastName, updates.profileIcon || '1', id],
+        [displayName, firstName, lastName, updates.profileIcon || DEFAULT_PROFILE_AVATAR_ID, id],
       );
       return this.getUser(id);
     }
@@ -203,9 +303,28 @@ class BongiiDatabase {
       `UPDATE users
        SET firstName = ?, lastName = ?, email = ?, profileIcon = ?
        WHERE id = ?`,
-      [updates.firstName, updates.lastName, updates.email || null, updates.profileIcon || '1', id],
+      [
+        updates.firstName,
+        updates.lastName,
+        updates.email || null,
+        updates.profileIcon || DEFAULT_PROFILE_AVATAR_ID,
+        id,
+      ],
     );
     return this.getUser(id);
+  }
+
+  grantDebugTokens(userId) {
+    return this.transaction(async (connection) => {
+      const result = await connection.run(
+        `UPDATE users
+         SET doubleOrNothingCredits = doubleOrNothingCredits + ?
+         WHERE id = ?`,
+        [DEBUG_TOKEN_GRANT, userId],
+      );
+      if (result.changes !== 1) throw new DomainError('User not found', 404);
+      return connection.get('SELECT * FROM users WHERE id = ?', [userId]);
+    });
   }
 
   getBackgroundPreset(id, connection = this.connection) {
@@ -294,7 +413,17 @@ class BongiiDatabase {
   }
 
   async createCampaign(campaign) {
-    const campaignCode = await this.transaction(async (connection) => {
+    const creation = await this.transaction(async (connection) => {
+      const debit = await connection.run(
+        `UPDATE users
+         SET doubleOrNothingCredits = doubleOrNothingCredits - ?
+         WHERE id = ? AND doubleOrNothingCredits >= ?`,
+        [CAMPAIGN_CREATION_COST, campaign.createdBy, CAMPAIGN_CREATION_COST],
+      );
+      if (debit.changes !== 1) {
+        throw new DomainError('Campaign creation requires 10 tokens', 409);
+      }
+
       let backgroundPresetId;
       if (campaign.backgroundPreset.id === 'custom') {
         const result = await connection.run(
@@ -354,14 +483,24 @@ class BongiiDatabase {
         }
       }
 
-      return code;
+      const user = await connection.get(
+        'SELECT doubleOrNothingCredits FROM users WHERE id = ?',
+        [campaign.createdBy],
+      );
+      return {
+        campaignCode: code,
+        remainingDoubleOrNothingCredits: user.doubleOrNothingCredits,
+      };
     });
 
-    return this.getCampaignByCode(campaignCode);
+    return {
+      ...(await this.getCampaignByCode(creation.campaignCode)),
+      remainingDoubleOrNothingCredits: creation.remainingDoubleOrNothingCredits,
+    };
   }
 
-  async createPlayerBoard(campaignCode, board) {
-    const boardCode = await this.transaction(async (connection) => {
+  async createPlayerBoard(campaignCode, board, { userId = null, editTokenHash = null } = {}) {
+    const creation = await this.transaction(async (connection) => {
       const campaign = await connection.get(
         'SELECT * FROM campaigns WHERE code = ?',
         [campaignCode.toUpperCase()],
@@ -371,34 +510,31 @@ class BongiiDatabase {
         throw new DomainError('Campaign is not accepting boards', 409);
       }
 
-      const expectedTileCount = campaign.boardSize * campaign.boardSize;
-      if (board.selectedTiles.length !== expectedTileCount) {
-        throw new DomainError(`Board must contain ${expectedTileCount} tiles`);
+      if (board.useDoubleOrNothing && userId === null) {
+        throw new DomainError('Sign in to use Double or Nothing', 401);
       }
+      await validateBoardTiles(connection, campaign, board.selectedTiles, {
+        allowSingleDuplicate: board.useDoubleOrNothing,
+        requireSingleDuplicate: board.useDoubleOrNothing,
+      });
 
-      const positions = new Set(board.selectedTiles.map((tile) => tile.position));
-      if (positions.size !== expectedTileCount || Math.min(...positions) !== 0 || Math.max(...positions) !== expectedTileCount - 1) {
-        throw new DomainError('Board positions must be unique and contiguous');
+      let remainingDoubleOrNothingCredits;
+      if (board.useDoubleOrNothing) {
+        const debit = await connection.run(
+          `UPDATE users
+           SET doubleOrNothingCredits = doubleOrNothingCredits - 1
+           WHERE id = ? AND doubleOrNothingCredits > 0`,
+          [userId],
+        );
+        if (debit.changes !== 1) {
+          throw new DomainError('No Double or Nothing credits remaining', 409);
+        }
+        const user = await connection.get(
+          'SELECT doubleOrNothingCredits FROM users WHERE id = ?',
+          [userId],
+        );
+        remainingDoubleOrNothingCredits = user.doubleOrNothingCredits;
       }
-
-      const centerPosition = Math.floor(expectedTileCount / 2);
-      const centerTiles = board.selectedTiles.filter((tile) => tile.isCenter);
-      if (centerTiles.length !== 1 || centerTiles[0].position !== centerPosition) {
-        throw new DomainError('Board must contain one center tile in the center position');
-      }
-
-      const allowedItems = await connection.all(
-        `SELECT cci.id
-         FROM campaignCategoryItems cci
-         JOIN campaignCategories cc ON cc.id = cci.categoryId
-         WHERE cc.campaignId = ?`,
-        [campaign.id],
-      );
-      const allowedItemIds = new Set(allowedItems.map((item) => item.id));
-      const invalidTile = board.selectedTiles.find((tile) => (
-        !tile.isCenter && !allowedItemIds.has(tile.categoryItemId)
-      ));
-      if (invalidTile) throw new DomainError('Board contains an item from another campaign');
 
       let code;
       for (let attempt = 0; attempt < 20; attempt += 1) {
@@ -412,27 +548,74 @@ class BongiiDatabase {
       if (!code) throw new Error('Unable to generate a unique board code');
 
       const result = await connection.run(
-        `INSERT INTO playerBoards (campaignId, playerName, boardCode, createdAt)
-         VALUES (?, ?, ?, ?)`,
-        [campaign.id, board.playerName, code, new Date().toISOString()],
+        `INSERT INTO playerBoards
+          (campaignId, userId, playerName, boardCode, createdAt, editTokenHash,
+           usedDoubleOrNothing)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          campaign.id,
+          userId,
+          board.playerName,
+          code,
+          new Date().toISOString(),
+          editTokenHash,
+          board.useDoubleOrNothing ? 1 : 0,
+        ],
       );
+      await insertBoardTiles(connection, result.lastID, board.selectedTiles);
 
-      for (const tile of board.selectedTiles) {
-        await connection.run(
-          `INSERT INTO playerBoardTiles
-            (boardId, categoryItemId, position, isCenter, customText)
-           VALUES (?, ?, ?, ?, ?)`,
-          [
-            result.lastID,
-            tile.isCenter ? null : tile.categoryItemId,
-            tile.position,
-            tile.isCenter ? 1 : 0,
-            tile.customText || null,
-          ],
-        );
+      return { boardCode: code, remainingDoubleOrNothingCredits };
+    });
+
+    const createdBoard = await this.getPlayerBoardByCode(creation.boardCode);
+    return {
+      ...createdBoard,
+      ...(creation.remainingDoubleOrNothingCredits !== undefined
+        ? { remainingDoubleOrNothingCredits: creation.remainingDoubleOrNothingCredits }
+        : {}),
+    };
+  }
+
+  async canEditPlayerBoard(boardCode, { userId = null, editToken = null } = {}) {
+    const board = await this.connection.get(
+      'SELECT userId, editTokenHash FROM playerBoards WHERE boardCode = ?',
+      [boardCode.toUpperCase()],
+    );
+    if (!board) return false;
+    if (board.userId !== null) return userId !== null && board.userId === userId;
+    return matchesEditToken(editToken, board.editTokenHash);
+  }
+
+  async updatePlayerBoard(boardCode, boardUpdate, access = {}) {
+    await this.transaction(async (connection) => {
+      const board = await connection.get(
+        `SELECT pb.*, c.boardSize, c.status AS campaignStatus
+         FROM playerBoards pb
+         JOIN campaigns c ON c.id = pb.campaignId
+         WHERE pb.boardCode = ?`,
+        [boardCode.toUpperCase()],
+      );
+      if (!board) throw new DomainError('Board not found', 404);
+      const authorized = board.userId !== null
+        ? access.userId !== null && board.userId === access.userId
+        : matchesEditToken(access.editToken, board.editTokenHash);
+      if (!authorized) throw new DomainError('You cannot edit this board', 403);
+      if (board.campaignStatus !== 'open') {
+        throw new DomainError('Board editing closes when campaign entries lock', 409);
       }
 
-      return code;
+      await validateBoardTiles(connection, {
+        id: board.campaignId,
+        boardSize: board.boardSize,
+      }, boardUpdate.selectedTiles, {
+        allowSingleDuplicate: Boolean(board.usedDoubleOrNothing),
+      });
+      await connection.run(
+        'UPDATE playerBoards SET playerName = ? WHERE id = ?',
+        [boardUpdate.playerName, board.id],
+      );
+      await connection.run('DELETE FROM playerBoardTiles WHERE boardId = ?', [board.id]);
+      await insertBoardTiles(connection, board.id, boardUpdate.selectedTiles);
     });
 
     return this.getPlayerBoardByCode(boardCode);
@@ -441,9 +624,12 @@ class BongiiDatabase {
   async getPlayerBoardTiles(boardId, connection = this.connection) {
     const tiles = await connection.all(
       `SELECT pbt.*, cci.text, cci.status AS itemStatus,
-              cci.decidedAt, cci.decidedBy,
+              cci.categoryId, cci.decidedAt, cci.decidedBy,
+              c.boardSize AS campaignBoardSize,
               cc.name AS categoryName, cc.type AS categoryType
        FROM playerBoardTiles pbt
+       JOIN playerBoards pb ON pb.id = pbt.boardId
+       JOIN campaigns c ON c.id = pb.campaignId
        LEFT JOIN campaignCategoryItems cci ON pbt.categoryItemId = cci.id
        LEFT JOIN campaignCategories cc ON cci.categoryId = cc.id
        WHERE pbt.boardId = ?
@@ -451,13 +637,18 @@ class BongiiDatabase {
       [boardId],
     );
 
-    return tiles.map(({ decidedAt, decidedBy, ...tile }) => ({
-      ...tile,
-      outcome: {
-        status: tile.isCenter ? 'happened' : (tile.itemStatus || 'pending'),
-        decidedAt: tile.isCenter ? null : decidedAt,
-      },
-    }));
+    return tiles.map(({ campaignBoardSize, decidedAt, decidedBy, ...tile }) => {
+      const isFree = Boolean(tile.isCenter)
+        && hasFreeCenter(campaignBoardSize)
+        && tile.position === freeCenterPosition(campaignBoardSize);
+      return {
+        ...tile,
+        outcome: {
+          status: isFree ? 'happened' : (tile.itemStatus || 'pending'),
+          decidedAt: isFree ? null : decidedAt,
+        },
+      };
+    });
   }
 
   async getPlayerBoardByCode(boardCode) {
@@ -465,9 +656,11 @@ class BongiiDatabase {
       `SELECT pb.*, c.code AS campaignCode, c.title AS campaignTitle,
               c.boardSize, c.backgroundPreset AS presetId,
               c.startDateTime, c.status AS campaignStatus,
-              c.version AS campaignVersion
+          c.version AS campaignVersion,
+          u.photoUrl AS ownerPhotoUrl, u.profileIcon AS ownerProfileIcon
        FROM playerBoards pb
        JOIN campaigns c ON pb.campaignId = c.id
+        LEFT JOIN users u ON u.id = pb.userId
        WHERE pb.boardCode = ?`,
       [boardCode.toUpperCase()],
     );
@@ -477,8 +670,37 @@ class BongiiDatabase {
       this.getPlayerBoardTiles(board.id),
       this.getBackgroundPreset(board.presetId),
     ]);
-    const { userId, ...publicBoard } = board;
-    return { ...publicBoard, tiles, backgroundPreset };
+    const outcomeByItemId = new Map(tiles
+      .filter((tile) => tile.categoryItemId)
+      .map((tile) => [tile.categoryItemId, tile.outcome.status]));
+    const score = scoreBoard({
+      boardSize: board.boardSize,
+      tiles,
+      outcomeByItemId,
+    });
+    const {
+      editTokenHash,
+      ownerPhotoUrl,
+      ownerProfileIcon,
+      usedDoubleOrNothing,
+      userId,
+      ...publicBoard
+    } = board;
+    return {
+      ...publicBoard,
+      usedDoubleOrNothing: Boolean(usedDoubleOrNothing),
+      tiles,
+      backgroundPreset,
+      currentScore: {
+        completedLineCount: score.completedLineCount,
+        longestRun: score.longestRun,
+        matchedTileCount: score.matchedTileCount,
+      },
+      playerAvatar: {
+        photoUrl: ownerPhotoUrl || null,
+        profileIcon: ownerProfileIcon || DEFAULT_PROFILE_AVATAR_ID,
+      },
+    };
   }
 
   async listBoards(campaignCode) {
@@ -492,9 +714,11 @@ class BongiiDatabase {
     const boards = await this.connection.all(
       `SELECT pb.*, c.code AS campaignCode, c.title AS campaignTitle,
               c.boardSize AS campaignBoardSize, c.backgroundPreset AS presetId,
-              c.status AS campaignStatus, c.version AS campaignVersion
+          c.status AS campaignStatus, c.version AS campaignVersion,
+          u.photoUrl AS ownerPhotoUrl, u.profileIcon AS ownerProfileIcon
        FROM playerBoards pb
        JOIN campaigns c ON c.id = pb.campaignId
+        LEFT JOIN users u ON u.id = pb.userId
        ${where}
        ORDER BY pb.createdAt DESC`,
       params,
@@ -506,8 +730,25 @@ class BongiiDatabase {
         this.getPlayerBoardTiles(board.id),
         this.connection.get('SELECT COUNT(*) AS count FROM playerBoards WHERE campaignId = ?', [board.campaignId]),
       ]);
-      const { userId, ...publicBoard } = board;
-      return { ...publicBoard, backgroundPreset, selectedTiles, playerCount: count.count };
+      const {
+        editTokenHash,
+        ownerPhotoUrl,
+        ownerProfileIcon,
+        usedDoubleOrNothing,
+        userId,
+        ...publicBoard
+      } = board;
+      return {
+        ...publicBoard,
+        usedDoubleOrNothing: Boolean(usedDoubleOrNothing),
+        backgroundPreset,
+        selectedTiles,
+        playerCount: count.count,
+        playerAvatar: {
+          photoUrl: ownerPhotoUrl || null,
+          profileIcon: ownerProfileIcon || DEFAULT_PROFILE_AVATAR_ID,
+        },
+      };
     }));
   }
 
@@ -537,22 +778,35 @@ class BongiiDatabase {
     const rows = await connection.all(
       `SELECT br.boardId, br.rank, br.longestRun,
               br.completedLineCount, br.matchedTileCount,
+              br.doubleOrNothingCreditsAwarded AS creditsAwarded,
               pb.playerName, pb.boardCode,
+              u.photoUrl AS ownerPhotoUrl, u.profileIcon AS ownerProfileIcon,
               (SELECT COUNT(*) FROM boardResults tied
                WHERE tied.campaignResultId = br.campaignResultId
                  AND tied.rank = br.rank) AS rankCount
        FROM boardResults br
        JOIN playerBoards pb ON pb.id = br.boardId
+      LEFT JOIN users u ON u.id = pb.userId
        WHERE br.campaignResultId = ?
        ORDER BY br.rank, COALESCE(pb.playerName, ''), pb.boardCode
        LIMIT ? OFFSET ?`,
       [campaignResult.resultId, RESULTS_PAGE_SIZE, offset],
     );
-    const results = await Promise.all(rows.map(async ({ boardId, rankCount, ...row }) => {
+    const results = await Promise.all(rows.map(async ({
+      boardId,
+      ownerPhotoUrl,
+      ownerProfileIcon,
+      rankCount,
+      ...row
+    }) => {
       const tiles = await this.getPlayerBoardTiles(boardId, connection);
       return {
         ...row,
         sharedRank: rankCount > 1,
+        playerAvatar: {
+          photoUrl: ownerPhotoUrl || null,
+          profileIcon: ownerProfileIcon || DEFAULT_PROFILE_AVATAR_ID,
+        },
         tiles: tiles.map((tile) => ({
           position: tile.position,
           isCenter: tile.isCenter,
@@ -641,7 +895,7 @@ class BongiiDatabase {
       );
       const outcomeByItemId = new Map(outcomes.map((outcome) => [outcome.id, outcome.status]));
       const boards = await connection.all(
-        `SELECT id, playerName, boardCode
+        `SELECT id, userId, playerName, boardCode
          FROM playerBoards
          WHERE campaignId = ?
          ORDER BY id`,
@@ -673,6 +927,7 @@ class BongiiDatabase {
         }
         return {
           boardId: board.id,
+          userId: board.userId,
           boardCode: board.boardCode,
           playerName: board.playerName,
           longestRun: score.longestRun,
@@ -688,12 +943,16 @@ class BongiiDatabase {
          VALUES (?, ?, ?, ?)`,
         [campaign.id, finalizedAt, finalizedBy, RULES_VERSION],
       );
+      const creditsByUserId = new Map();
       for (const score of ranked) {
+        const creditsAwarded = score.userId === null
+          ? 0
+          : Math.floor(ranked.length / score.rank);
         await connection.run(
           `INSERT INTO boardResults
             (campaignResultId, boardId, rank, longestRun,
-             completedLineCount, matchedTileCount)
-           VALUES (?, ?, ?, ?, ?, ?)`,
+             completedLineCount, matchedTileCount, doubleOrNothingCreditsAwarded)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`,
           [
             campaignResultInsert.lastID,
             score.boardId,
@@ -701,7 +960,22 @@ class BongiiDatabase {
             score.longestRun,
             score.completedLineCount,
             score.matchedTileCount,
+            creditsAwarded,
           ],
+        );
+        if (creditsAwarded > 0) {
+          creditsByUserId.set(
+            score.userId,
+            (creditsByUserId.get(score.userId) || 0) + creditsAwarded,
+          );
+        }
+      }
+      for (const [userId, credits] of creditsByUserId) {
+        await connection.run(
+          `UPDATE users
+           SET doubleOrNothingCredits = doubleOrNothingCredits + ?
+           WHERE id = ?`,
+          [credits, userId],
         );
       }
 

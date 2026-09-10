@@ -3,17 +3,45 @@ import { campaignService } from "../services/campaignService";
 import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Users, Eye, Clock, Check, X, Trash2, Play, Shuffle, User, Trophy } from "lucide-react";
+import { ArrowLeft, Users, Eye, Clock, Check, X, Trash2, Play, Shuffle, User, Trophy, Coins, CopyPlus } from "lucide-react";
 import Background from "../components/background";
 import { BackgroundProvider, useBackground } from "../components/context";
 import Footer from "../components/footer";
 import Header from "../components/header";
+import { useAuth } from "../components/authContext";
+import { rememberBoardEditToken } from "../utils/boardAccess.mjs";
+import PlayerAvatar from "../components/playerAvatar";
 
 const createEmptyBoard = (size) => {
   const board = Array(size * size).fill(null);
-  const centerIndex = Math.floor((size * size) / 2);
-  board[centerIndex] = { type: 'free', text: 'FREE SPACE', isCenter: true };
+  if (size % 2 === 1) {
+    const centerIndex = Math.floor((size * size) / 2);
+    board[centerIndex] = { type: 'free', text: 'FREE SPACE', isCenter: true };
+  }
   return board;
+};
+
+const selectionsFromBoard = (campaign, board) => {
+  const selections = {};
+  board.filter((tile) => tile && !tile.isCenter).forEach((tile) => {
+    const category = campaign.categories.find((candidate) => candidate.id === tile.categoryId);
+    const item = category?.items.find((candidate) => candidate.id === tile.categoryItemId);
+    if (!category || !item) return;
+    if (category.type.startsWith("choose_many")) {
+      selections[category.id] = [...(selections[category.id] || []), item];
+    } else {
+      selections[category.id] = item;
+    }
+  });
+  return selections;
+};
+
+const duplicatedItemIdFromBoard = (board) => {
+  const itemCounts = new Map();
+  board.filter((cell) => cell && !cell.isCenter).forEach((cell) => {
+    itemCounts.set(cell.itemId, (itemCounts.get(cell.itemId) || 0) + 1);
+  });
+  return [...itemCounts.entries()].find(([, count]) => count > 1)?.[0] ?? null;
 };
 
 const campaignStatusDetails = {
@@ -40,8 +68,19 @@ export default function CampaignPage() {
   const [draggedItem, setDraggedItem] = useState(null);
   const [hoveredCell, setHoveredCell] = useState(null);
   const [submissionError, setSubmissionError] = useState("");
+  const [editingBoardCode, setEditingBoardCode] = useState(null);
+  const [editingUsedDoubleOrNothing, setEditingUsedDoubleOrNothing] = useState(false);
   const boardCellRefs = useRef([]);
   const { setSelectedPreset } = useBackground();
+  const {
+    firebaseUser,
+    isAuthenticated,
+    loading: authLoading,
+    profile,
+    syncProfile,
+  } = useAuth();
+  const effectivePlayerName = playerName || (!editingBoardCode ? profile?.displayName : "") || "";
+  const duplicatedItemId = duplicatedItemIdFromBoard(board);
 
   useEffect(() => {
     const fetchCampaign = async () => {
@@ -51,8 +90,30 @@ export default function CampaignPage() {
           const data = await response.json();
           console.log(data);
           setCampaign(data);
-          setBoard(createEmptyBoard(data.boardSize));
           setSelectedPreset(data.backgroundPreset);
+          const requestedBoardCode = new URLSearchParams(window.location.search).get("edit");
+          if (requestedBoardCode) {
+            const boardResponse = await campaignService.getPlayerBoard(requestedBoardCode);
+            const boardData = await boardResponse.json();
+            if (!boardResponse.ok) throw new Error(boardData.error || "Failed to load board");
+            if (boardData.campaignCode !== campaignCode.toUpperCase() || !boardData.canEdit) {
+              throw new Error("You cannot edit this board");
+            }
+            const editableBoard = createEmptyBoard(data.boardSize);
+            boardData.tiles.forEach((tile) => {
+              editableBoard[tile.position] = {
+                ...tile,
+                itemId: tile.categoryItemId,
+              };
+            });
+            setBoard(editableBoard);
+            setSelectedItems(selectionsFromBoard(data, boardData.tiles));
+            setPlayerName(boardData.playerName || "");
+            setEditingBoardCode(boardData.boardCode);
+            setEditingUsedDoubleOrNothing(Boolean(boardData.usedDoubleOrNothing));
+          } else {
+            setBoard(createEmptyBoard(data.boardSize));
+          }
         } else if (response.status === 404) {
           setError("Campaign not found");
         } else {
@@ -147,7 +208,7 @@ const renderMiniBoard = (boardData, boardSize) => {
   if (campaign.status !== "open") return;
   const categoryId = category.id;
 
-  if (category.type === 'choose_many') {
+  if (category.type.startsWith('choose_many')) {
     const currentSelected = selectedItems[categoryId] || [];
     const isSelected = currentSelected.some(selected => selected.id === item.id);
 
@@ -219,7 +280,7 @@ const renderMiniBoard = (boardData, boardSize) => {
     // If there's a selected item from choose_many that's not on board, add it
     for (const [categoryId, items] of Object.entries(selectedItems)) {
       const category = campaign.categories.find(cat => cat.id.toString() === categoryId);
-      if (category && category.type === 'choose_many') {
+      if (category && category.type.startsWith('choose_many')) {
         const itemsArray = Array.isArray(items) ? items : [items];
         for (const item of itemsArray) {
           const isOnBoard = board.some(cell => 
@@ -248,6 +309,26 @@ const renderMiniBoard = (boardData, boardSize) => {
       newBoard[index] = null;
       setBoard(newBoard);
     }
+  };
+
+  const handleDuplicateTile = (event, index) => {
+    event.stopPropagation();
+    const cell = board[index];
+    const canUseToken = editingBoardCode
+      ? editingUsedDoubleOrNothing
+      : isAuthenticated && (profile?.doubleOrNothingCredits ?? 0) > 0;
+    if (campaign.status !== "open" || !cell || cell.isCenter
+      || duplicatedItemId !== null || !canUseToken) return;
+
+    const firstEmpty = board.findIndex((candidate) => candidate === null);
+    if (firstEmpty === -1) {
+      setSubmissionError("Remove a tile before using Double or Nothing.");
+      return;
+    }
+    const nextBoard = [...board];
+    nextBoard[firstEmpty] = { ...cell };
+    setBoard(nextBoard);
+    setSubmissionError("");
   };
 
   const handleDragStart = (e, index) => {
@@ -316,7 +397,7 @@ const renderMiniBoard = (boardData, boardSize) => {
 
   const isItemSelected = (category, item) => {
     const categoryItems = selectedItems[category.id];
-    if (category.type === 'choose_many') {
+    if (category.type.startsWith('choose_many')) {
       return Array.isArray(categoryItems) && categoryItems.some(selected => selected.id === item.id);
     }
     return categoryItems && categoryItems.id === item.id;
@@ -330,7 +411,7 @@ const renderMiniBoard = (boardData, boardSize) => {
 
 const canFinalize = () => {
   if (campaign.status !== "open") return false;
-  if (!playerName.trim()) return false;
+  if (!effectivePlayerName.trim()) return false;
 
   // Check all required categories have selections
   const requiredCategories = campaign.categories.filter(cat => cat.required);
@@ -367,15 +448,25 @@ const canFinalize = () => {
 
       const boardData = {
         campaignCode,
-        playerName: playerName.trim(),
-        selectedTiles
+        playerName: effectivePlayerName.trim(),
+        selectedTiles,
+        useDoubleOrNothing: duplicatedItemId !== null,
       };
 
-      const response = await campaignService.createPlayerBoard(boardData);
+      const response = editingBoardCode
+        ? await campaignService.updatePlayerBoard(editingBoardCode, boardData)
+        : await campaignService.createPlayerBoard(boardData);
 
       if (response.ok) {
         const data = await response.json();
-        router.push(`/boards/${data.boardCode}`);
+        const savedBoardCode = editingBoardCode || data.boardCode;
+        if (data.editToken) rememberBoardEditToken(savedBoardCode, data.editToken);
+        if (data.remainingDoubleOrNothingCredits !== undefined && firebaseUser) {
+          syncProfile(firebaseUser).catch((profileError) => {
+            console.error("Error refreshing Double or Nothing tokens:", profileError);
+          });
+        }
+        router.push(`/boards/${savedBoardCode}`);
       } else {
         const data = await response.json();
         setSubmissionError(data.error || "Error creating board. Please try again.");
@@ -431,6 +522,23 @@ const canFinalize = () => {
   }
 
   const isOpen = campaign.status === "open";
+  const canAddDoubleOrNothing = isOpen
+    && duplicatedItemId === null
+    && (editingBoardCode
+      ? editingUsedDoubleOrNothing
+      : isAuthenticated && (profile?.doubleOrNothingCredits ?? 0) > 0);
+  let doubleOrNothingStatus = "Sign in required";
+  if (editingBoardCode) {
+    doubleOrNothingStatus = editingUsedDoubleOrNothing
+      ? (duplicatedItemId !== null ? "Token used · tile doubled" : "Token used")
+      : "Available when creating a board";
+  } else if (authLoading) {
+    doubleOrNothingStatus = "Checking tokens";
+  } else if (isAuthenticated) {
+    doubleOrNothingStatus = (profile?.doubleOrNothingCredits ?? 0) > 0
+      ? (duplicatedItemId !== null ? "1 token selected" : "Not selected")
+      : "No tokens remaining";
+  }
   const status = campaignStatusDetails[campaign.status] || {
     label: campaign.status,
     message: "This campaign is read-only.",
@@ -541,7 +649,7 @@ const canFinalize = () => {
                 <label className="block text-white font-semibold mb-2">Your Name</label>
                 <input
                   type="text"
-                  value={playerName}
+                  value={effectivePlayerName}
                   onChange={(e) => setPlayerName(e.target.value)}
                   disabled={!isOpen}
                   placeholder="Enter your name..."
@@ -606,7 +714,7 @@ const canFinalize = () => {
                                       <User className="w-6 h-6 mx-auto mb-1" />
                                       <input
                                         type="text"
-                                        value={playerName}
+                                        value={effectivePlayerName}
                                         onChange={(e) => {
                                           setPlayerName(e.target.value);
                                           updatePlayerName(index, e.target.value);
@@ -620,19 +728,42 @@ const canFinalize = () => {
                                   ) : (
                                     <>
                                       <span className="text-xs font-medium break-words">{cell.text || cell.name}</span>
-                                      {isOpen && (
-                                        <button
-                                          type="button"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            handleRemoveFromBoard(index);
-                                          }}
-                                          className="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-700 text-white opacity-0 transition-opacity hover:bg-red-800 focus:opacity-100 group-focus-within:opacity-100 group-hover:opacity-100"
-                                          aria-label={`Remove ${cell.text || cell.name} from board`}
-                                          title="Remove tile"
+                                      {duplicatedItemId === cell.itemId && (
+                                        <span
+                                          role="img"
+                                          className="absolute bottom-0 left-0 flex h-6 w-6 items-center justify-center rounded-full bg-amber-300 text-slate-950"
+                                          aria-label="Double or Nothing tile"
+                                          title="Double or Nothing tile"
                                         >
-                                          <X className="w-3 h-3" />
-                                        </button>
+                                          <CopyPlus className="h-3.5 w-3.5" />
+                                        </span>
+                                      )}
+                                      {isOpen && (
+                                        <>
+                                          <button
+                                            type="button"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              handleRemoveFromBoard(index);
+                                            }}
+                                            className="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full bg-red-700 text-white opacity-0 transition-opacity hover:bg-red-800 focus:opacity-100 group-focus-within:opacity-100 group-hover:opacity-100"
+                                            aria-label={`Remove ${cell.text || cell.name} from board`}
+                                            title="Remove tile"
+                                          >
+                                            <X className="w-3 h-3" />
+                                          </button>
+                                          {canAddDoubleOrNothing && (
+                                            <button
+                                              type="button"
+                                              onClick={(event) => handleDuplicateTile(event, index)}
+                                              className="absolute -bottom-1 -right-1 flex h-7 w-7 items-center justify-center rounded-full bg-amber-300 text-slate-950 shadow-md transition-colors hover:bg-amber-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+                                              aria-label={`Duplicate ${cell.text || cell.name} with Double or Nothing`}
+                                              title="Duplicate tile"
+                                            >
+                                              <CopyPlus className="h-4 w-4" />
+                                            </button>
+                                          )}
+                                        </>
                                       )}
                                     </>
                                   )}
@@ -650,6 +781,23 @@ const canFinalize = () => {
                   Select category items, then use Enter or Space on an empty position to place a selected tile. Use arrow keys on a tile to move it.
                 </p>
               </div>
+
+              {isOpen && (
+                <div className="mb-6 border-l-4 border-amber-300 bg-amber-300/10 px-4 py-3 text-amber-50">
+                  <div className="flex items-center gap-3">
+                    <Coins className="h-5 w-5 shrink-0 text-amber-300" aria-hidden="true" />
+                    <div className="min-w-0 flex-1">
+                      <h3 className="font-semibold">Double or Nothing</h3>
+                      <p className="text-sm text-amber-100/80">{doubleOrNothingStatus}</p>
+                    </div>
+                    {!editingBoardCode && isAuthenticated && (
+                      <span className="shrink-0 rounded-md border border-amber-200/40 bg-black/20 px-2.5 py-1 text-sm font-semibold">
+                        {profile.doubleOrNothingCredits} tokens
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {isOpen && (
                 <div className="bg-white/10 rounded-xl p-4 mb-6">
@@ -680,12 +828,12 @@ const canFinalize = () => {
                   ) : finalizing ? (
                     <div className="flex items-center">
                       <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-white mr-2"></div>
-                      Creating Board...
+                      {editingBoardCode ? "Saving Board..." : "Creating Board..."}
                     </div>
                   ) : (
                     <div className="flex items-center">
                       <Play className="w-5 h-5 mr-2" />
-                      Finalize Board
+                      {editingBoardCode ? "Save Board" : "Finalize Board"}
                     </div>
                   )}
                 </motion.button>
@@ -694,7 +842,7 @@ const canFinalize = () => {
               {isOpen && !canFinalize() && (
                 <div className="text-center mt-4">
                   <p className="text-yellow-300 text-sm">
-                    {!playerName.trim() && "Enter your name and "}
+                    {!effectivePlayerName.trim() && "Enter your name and "}
                     Complete all required categories to finalize your board
                   </p>
                 </div>
@@ -740,10 +888,17 @@ const canFinalize = () => {
                       </div>
                       
                       <div className="space-y-1">
-                        <div className="flex items-center justify-between">
-                          <h4 className="text-white font-medium text-sm truncate">
-                            {boardData.playerName || 'Anonymous'}
-                          </h4>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex min-w-0 items-center gap-2">
+                            <PlayerAvatar
+                              avatar={boardData.playerAvatar}
+                              name={boardData.playerName}
+                              size={28}
+                            />
+                            <h4 className="truncate text-sm font-medium text-white">
+                              {boardData.playerName || 'Anonymous'}
+                            </h4>
+                          </div>
                           <motion.div
                             whileHover={{ scale: 1.1 }}
                             className="bg-blue-500/20 hover:bg-blue-500/30 rounded-full p-1"

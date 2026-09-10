@@ -70,7 +70,10 @@ export const getCompletedLines = ({ boardSize, tiles = [] }) => {
   return [...rows, ...columns, ...diagonals].filter((line) => (
     line.positions.every((position) => {
       const tile = tileByPosition.get(position);
-      return tile && (tile.isCenter || tile.outcome?.status === "happened");
+      const isFreeCenter = boardSize % 2 === 1
+        && position === Math.floor((boardSize * boardSize) / 2)
+        && tile?.isCenter;
+      return tile && (isFreeCenter || tile.outcome?.status === "happened");
     })
   ));
 };
@@ -78,3 +81,13 @@ export const getCompletedLines = ({ boardSize, tiles = [] }) => {
 export const getCompletedLinePositions = (board) => new Set(
   getCompletedLines(board).flatMap((line) => line.positions),
 );
+
+export const getBongAnnouncement = (previous, next, { live = false } = {}) => {
+  if (!live || !previous || !next
+    || next.campaignVersion !== previous.campaignVersion + 1) return null;
+  const previousCount = previous.currentScore?.completedLineCount || 0;
+  const nextCount = next.currentScore?.completedLineCount || 0;
+  const newLines = nextCount - previousCount;
+  if (newLines < 1) return null;
+  return newLines > 1 ? "Double Bong!" : "Bong!";
+};

@@ -3,6 +3,7 @@ import "./globals.css";
 import { MusicProvider } from "./components/music";
 import { BackgroundProvider } from "./components/context";
 import { AuthProvider } from "./components/authContext";
+import ReadinessStatus from "./components/readinessStatus";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
@@ -19,6 +20,7 @@ export default function RootLayout({ children }) {
         <AuthProvider>
           <MusicProvider>
             <BackgroundProvider>
+              <ReadinessStatus />
               {children}
             </BackgroundProvider>
           </MusicProvider>

@@ -42,7 +42,13 @@ export const createVerifiedUser = async (request, {
     { data: { oobCode: verification.oobCode } },
   ), "Verifying an Auth emulator user");
 
-  return { displayName, email, password };
+  return {
+    displayName,
+    email,
+    idToken: signup.idToken,
+    uid: signup.localId,
+    password,
+  };
 };
 
 export const signInTestUser = async ({ page, request, returnTo = "/home" }) => {

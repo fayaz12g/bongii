@@ -27,15 +27,19 @@ const isExactHttpOrigin = (origin) => {
 };
 
 const parsePrivateKey = (value) => value?.replace(/\\n/g, '\n');
+const nodeEnv = process.env.NODE_ENV || 'development';
 
 const config = {
-  nodeEnv: process.env.NODE_ENV || 'development',
+  nodeEnv,
   port: parsePort(process.env.PORT),
   databasePath: process.env.DATABASE_PATH || path.join(__dirname, 'data', 'bongii.db'),
   firebaseProjectId: process.env.FIREBASE_PROJECT_ID,
   firebaseClientEmail: process.env.FIREBASE_CLIENT_EMAIL,
   firebasePrivateKey: parsePrivateKey(process.env.FIREBASE_PRIVATE_KEY),
   firebaseAuthEmulatorHost: process.env.FIREBASE_AUTH_EMULATOR_HOST,
+  enableDebugTokenPurchase: process.env.ENABLE_DEBUG_TOKEN_PURCHASE === undefined
+    ? nodeEnv !== 'production'
+    : process.env.ENABLE_DEBUG_TOKEN_PURCHASE === 'true',
   allowedOrigins: parseOrigins(process.env.CLIENT_ORIGINS),
 };
 

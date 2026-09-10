@@ -28,7 +28,8 @@ const campaignImportSchema = z.object({
     (total, category) => total + category.items.length,
     0,
   );
-  const requiredItemCount = (campaign.boardSize * campaign.boardSize) - 1;
+  const requiredItemCount = (campaign.boardSize * campaign.boardSize)
+    - (campaign.boardSize % 2 === 1 ? 1 : 0);
   if (itemCount < requiredItemCount) {
     context.addIssue({
       code: "custom",

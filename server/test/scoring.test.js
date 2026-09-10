@@ -1,6 +1,7 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const fixtures = require('./fixtures/scoring.json');
+const { freeCenterPosition, hasFreeCenter } = require('../boardRules');
 const { RULES_VERSION, rankBoards, scoreBoard } = require('../scoring');
 
 const inputFor = (fixture) => {
@@ -8,7 +9,7 @@ const inputFor = (fixture) => {
     return { boardSize: fixture.boardSize, tiles: [], outcomeByItemId: {} };
   }
 
-  const centerPosition = Math.floor((fixture.boardSize ** 2) / 2);
+  const centerPosition = freeCenterPosition(fixture.boardSize);
   const happened = new Set(fixture.happenedPositions || []);
   const pending = new Set(fixture.pendingPositions || []);
   const empty = new Set(fixture.emptyPositions || []);
@@ -18,7 +19,7 @@ const inputFor = (fixture) => {
 
   for (let position = 0; position < fixture.boardSize ** 2; position += 1) {
     if (empty.has(position)) continue;
-    const isCenter = position === centerPosition;
+    const isCenter = hasFreeCenter(fixture.boardSize) && position === centerPosition;
     const categoryItemId = isCenter ? null : position + 1;
     tiles.push({ position, isCenter, categoryItemId });
     if (isCenter || missing.has(position)) continue;
@@ -31,7 +32,25 @@ const inputFor = (fixture) => {
 };
 
 test('scoring rules have a persisted version', () => {
-  assert.equal(RULES_VERSION, 1);
+  assert.equal(RULES_VERSION, 2);
+});
+
+test('does not grant a free tile on a 4 by 4 board', () => {
+  const tiles = Array.from({ length: 16 }, (_, position) => ({
+    position,
+    isCenter: false,
+    categoryItemId: position + 1,
+  }));
+  const outcomeByItemId = Object.fromEntries(
+    tiles.map((tile) => [tile.categoryItemId, tile.position === 10 ? 'did_not_happen' : 'happened']),
+  );
+
+  assert.deepEqual(scoreBoard({ boardSize: 4, tiles, outcomeByItemId }), {
+    longestRun: 4,
+    completedLineCount: 7,
+    matchedTileCount: 15,
+    integrityWarnings: [],
+  });
 });
 
 for (const fixture of fixtures.scoreCases) {

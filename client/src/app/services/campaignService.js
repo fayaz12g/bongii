@@ -1,12 +1,12 @@
-import { getServerPath } from '../utils/config';
-import { apiFetch, authenticatedApiFetch } from './apiClient';
+import { getBoardEditToken } from '../utils/boardAccess.mjs';
+import { apiFetch, authenticatedApiFetch, optionalAuthenticatedApiFetch } from './apiClient';
 
 export const campaignService = {
 
   // Check if a campaign exists by code
   async validateCampaign(code) {
     try {
-      const response = await fetch(`${getServerPath()}/campaigns/validate/${code}`, {
+      const response = await apiFetch(`/campaigns/validate/${code}`, {
         method: 'GET',
         headers: {
           "Content-type": "application/json; charset=UTF-8",
@@ -29,7 +29,7 @@ export const campaignService = {
   // Get campaign details by code
   async getCampaign(code) {
     try {
-      const response = await fetch(`${getServerPath()}/campaigns/${code}`, {
+      const response = await apiFetch(`/campaigns/${code}`, {
         method: 'GET',
         headers: {
           "Content-type": "application/json; charset=UTF-8",
@@ -49,7 +49,7 @@ export const campaignService = {
       if (group) searchParams.set("group", group);
       if (query) searchParams.set("query", query);
       const search = searchParams.size > 0 ? `?${searchParams.toString()}` : "";
-      const response = await fetch(`${getServerPath()}/campaigns${search}`, {
+      const response = await apiFetch(`/campaigns${search}`, {
         method: 'GET',
         headers: {
           "Content-type": "application/json; charset=UTF-8",
@@ -65,7 +65,7 @@ export const campaignService = {
     // Get all boards
   async getAllBoards() {
     try {
-      const response = await fetch(`${getServerPath()}/boards`, {
+      const response = await apiFetch('/boards', {
         method: 'GET',
         headers: {
           "Content-type": "application/json; charset=UTF-8",
@@ -81,7 +81,7 @@ export const campaignService = {
   // Get campaign boards
   async getCampaignBoards(campaignCode) {
     try {
-      const response = await fetch(`${getServerPath()}/campaigns/${campaignCode}/boards`, {
+      const response = await apiFetch(`/campaigns/${campaignCode}/boards`, {
         method: 'GET',
         headers: {
           "Content-type": "application/json; charset=UTF-8",
@@ -117,11 +117,12 @@ export const campaignService = {
 
   // Create a player board for a campaign
   async createPlayerBoard(payload) {
-  const res = await apiFetch(`/campaigns/${payload.campaignCode}/board`, {
+  const res = await optionalAuthenticatedApiFetch(`/campaigns/${payload.campaignCode}/board`, {
     method: "POST",
     body: JSON.stringify({
       playerName: payload.playerName,
-      selectedTiles: payload.selectedTiles
+      selectedTiles: payload.selectedTiles,
+      useDoubleOrNothing: Boolean(payload.useDoubleOrNothing),
     }),
     headers: {
       "Content-type": "application/json; charset=UTF-8"
@@ -135,17 +136,36 @@ export const campaignService = {
   // Get player board by unique board code
   async getPlayerBoard(boardCode) {
     try {
-      const response = await fetch(`${getServerPath()}/boards/${boardCode}`, {
+      const headers = new Headers({
+        "Content-type": "application/json; charset=UTF-8",
+      });
+      const editToken = getBoardEditToken(boardCode);
+      if (editToken) headers.set("X-Board-Edit-Token", editToken);
+      const response = await optionalAuthenticatedApiFetch(`/boards/${boardCode}`, {
         method: 'GET',
-        headers: {
-          "Content-type": "application/json; charset=UTF-8",
-        },
+        headers,
       });
       return response;
     } catch (error) {
       console.error('Error fetching player board:', error);
       throw error;
     }
+  },
+
+  async updatePlayerBoard(boardCode, payload) {
+    const headers = new Headers({
+      "Content-type": "application/json; charset=UTF-8",
+    });
+    const editToken = getBoardEditToken(boardCode);
+    if (editToken) headers.set("X-Board-Edit-Token", editToken);
+    return optionalAuthenticatedApiFetch(`/boards/${boardCode}`, {
+      method: "PUT",
+      body: JSON.stringify({
+        playerName: payload.playerName,
+        selectedTiles: payload.selectedTiles,
+      }),
+      headers,
+    });
   },
 
   async getModeratorCampaign(campaignCode) {
@@ -198,7 +218,7 @@ export const campaignService = {
   },
 
   async getCampaignResults(campaignCode, page = 1) {
-    return fetch(`${getServerPath()}/campaigns/${campaignCode}/results?page=${page}`, {
+    return apiFetch(`/campaigns/${campaignCode}/results?page=${page}`, {
       method: "GET",
       headers: {
         "Content-type": "application/json; charset=UTF-8"

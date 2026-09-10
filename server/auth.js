@@ -13,13 +13,15 @@ const publicUser = (user) => ({
   email: user.email,
   profileIcon: user.profileIcon,
   photoUrl: user.photoUrl,
+  doubleOrNothingCredits: user.doubleOrNothingCredits,
 });
 
-const createAuthMiddleware = (database, verifyFirebaseToken) => asyncRoute(async (req, res, next) => {
+const createAuthenticationMiddleware = (database, verifyFirebaseToken, required) => asyncRoute(async (req, res, next) => {
   const authorization = req.get('Authorization');
   const bearer = authorization?.match(/^Bearer\s+(.+)$/i);
   if (!bearer) {
-    res.status(401).json({ error: 'Authentication required' });
+    if (required) res.status(401).json({ error: 'Authentication required' });
+    else next();
     return;
   }
 
@@ -46,4 +48,17 @@ const createAuthMiddleware = (database, verifyFirebaseToken) => asyncRoute(async
   next();
 });
 
-module.exports = { asyncRoute, createAuthMiddleware, publicUser };
+const createAuthMiddleware = (database, verifyFirebaseToken) => (
+  createAuthenticationMiddleware(database, verifyFirebaseToken, true)
+);
+
+const createOptionalAuthMiddleware = (database, verifyFirebaseToken) => (
+  createAuthenticationMiddleware(database, verifyFirebaseToken, false)
+);
+
+module.exports = {
+  asyncRoute,
+  createAuthMiddleware,
+  createOptionalAuthMiddleware,
+  publicUser,
+};

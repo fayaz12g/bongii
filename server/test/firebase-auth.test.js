@@ -57,7 +57,7 @@ const addLocalProfile = async (database, {
   firstName,
   lastName,
   email,
-  profileIcon = '1',
+  profileIcon = 'chippy-1',
 }) => {
   const result = await database.connection.run(
     `INSERT INTO users (username, firstName, lastName, email, profileIcon)
@@ -82,7 +82,7 @@ test('links a verified Firebase identity to one existing profile without changin
     firstName: 'Original',
     lastName: 'Owner',
     email: 'OWNER@example.com',
-    profileIcon: '2',
+    profileIcon: 'chippy-2',
   });
   await context.database.connection.run(
     `INSERT INTO campaigns
@@ -129,11 +129,17 @@ test('reuses one local profile for repeated Firebase sign-ins', async () => {
   const updated = await context.api
     .put('/api/users/current')
     .set('Authorization', `Bearer ${tokenFor('new')}`)
-    .send({ displayName: 'Renamed User', profileIcon: '3' });
+    .send({ displayName: 'Renamed User', profileIcon: 'lucky-3' });
   assert.equal(updated.status, 200);
   assert.equal(updated.body.displayName, 'Renamed User');
-  assert.equal(updated.body.profileIcon, '3');
+  assert.equal(updated.body.profileIcon, 'lucky-3');
   assert.equal(updated.body.email, 'new@example.com');
+
+  const invalidAvatar = await context.api
+    .put('/api/users/current')
+    .set('Authorization', `Bearer ${tokenFor('new')}`)
+    .send({ displayName: 'Renamed User', profileIcon: 'unknown-avatar' });
+  assert.equal(invalidAvatar.status, 400);
 
   const count = await context.database.connection.get(
     'SELECT COUNT(*) AS count FROM users WHERE firebaseUid = ?',
@@ -164,7 +170,7 @@ test('requires verified email and refuses ambiguous profile links', async () => 
       firstName: 'Duplicate',
       lastName: 'User',
       email: 'duplicate@example.com',
-      profileIcon: '1',
+      profileIcon: 'chippy-1',
     });
   }
 

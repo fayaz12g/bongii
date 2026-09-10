@@ -3,10 +3,12 @@ const os = require('os');
 const path = require('path');
 const request = require('supertest');
 const { createApp } = require('../app');
+const { freeCenterPosition, hasFreeCenter } = require('../boardRules');
 const { BongiiDatabase } = require('../db');
 
 const testConfig = {
   firebaseProjectId: 'bongii-test',
+  enableDebugTokenPurchase: true,
   allowedOrigins: ['http://localhost:3001'],
 };
 const testLogger = {
@@ -89,7 +91,7 @@ const boardPayloadFor = (campaign, playerName = 'Player One') => {
   const itemIds = campaign.categories[0].items.map((item) => item.id);
   let itemIndex = 0;
   const selectedTiles = Array.from({ length: campaign.boardSize ** 2 }, (_, position) => (
-    position === Math.floor((campaign.boardSize ** 2) / 2)
+    hasFreeCenter(campaign.boardSize) && position === freeCenterPosition(campaign.boardSize)
       ? { position, isCenter: true, categoryItemId: null, customText: 'FREE SPACE' }
       : { position, isCenter: false, categoryItemId: itemIds[itemIndex++] }
   ));

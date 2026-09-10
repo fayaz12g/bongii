@@ -8,6 +8,7 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleDashed,
+  Coins,
   ExternalLink,
   RefreshCw,
   Sparkles,
@@ -19,6 +20,7 @@ import Footer from "../../components/footer";
 import Header from "../../components/header";
 import { useBackground } from "../../components/context";
 import { campaignService } from "../../services/campaignService";
+import PlayerAvatar from "../../components/playerAvatar";
 
 const outcomeDetails = {
   happened: { label: "Happened", icon: Check, className: "border-emerald-300/60 bg-emerald-600/75 text-white" },
@@ -35,7 +37,7 @@ const formatDate = (value) => {
   }).format(date);
 };
 
-const BoardPreview = ({ boardSize, playerName, tiles }) => (
+const BoardPreview = ({ avatar, boardSize, playerName, tiles }) => (
   <div
     className="grid aspect-square w-full gap-1"
     style={{ gridTemplateColumns: `repeat(${boardSize}, minmax(0, 1fr))` }}
@@ -54,7 +56,7 @@ const BoardPreview = ({ boardSize, playerName, tiles }) => (
                 aria-label="Free space: happened"
                 title="Free space"
               >
-                <Sparkles className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                <PlayerAvatar avatar={avatar} name={playerName} size={18} />
                 <span className="mt-0.5 max-w-full break-words text-[8px] font-semibold leading-tight">Free</span>
               </div>
             );
@@ -211,8 +213,13 @@ export default function CampaignLeaderboardPage() {
                     className="grid gap-7 border-t border-white/20 py-7 md:grid-cols-[minmax(0,1fr)_14rem] md:items-center"
                   >
                     <div className="min-w-0">
-                      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-2">
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
                         <span className="text-4xl font-black text-amber-200">#{result.rank}</span>
+                        <PlayerAvatar
+                          avatar={result.playerAvatar}
+                          name={result.playerName}
+                          size={48}
+                        />
                         <div>
                           <h2 className="break-words text-2xl font-semibold text-white">
                             {result.playerName || "Anonymous player"}
@@ -220,6 +227,12 @@ export default function CampaignLeaderboardPage() {
                           <p className="mt-1 text-xs font-semibold uppercase text-gray-300">
                             {result.sharedRank ? "Shared rank" : "Final rank"}
                           </p>
+                          {result.creditsAwarded > 0 && (
+                            <p className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-amber-200">
+                              <Coins className="h-4 w-4" aria-hidden="true" />
+                              +{result.creditsAwarded} {result.creditsAwarded === 1 ? "token" : "tokens"}
+                            </p>
+                          )}
                         </div>
                       </div>
 
@@ -249,6 +262,7 @@ export default function CampaignLeaderboardPage() {
 
                     <div className="mx-auto aspect-square w-full max-w-56 border border-white/30 bg-black/25 p-2 md:mx-0">
                       <BoardPreview
+                        avatar={result.playerAvatar}
                         boardSize={campaign.boardSize}
                         playerName={result.playerName || "Anonymous player"}
                         tiles={result.tiles}

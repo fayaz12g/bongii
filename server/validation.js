@@ -1,4 +1,5 @@
 const { z } = require('zod');
+const { PROFILE_AVATAR_IDS } = require('./profileAvatars');
 
 const validationError = (result) => ({
   error: 'Invalid request',
@@ -25,15 +26,16 @@ const schemas = {
   profile: z.union([
     z.object({
       displayName: requiredText(160),
-      profileIcon: z.string().trim().max(100).optional(),
+      profileIcon: z.enum(PROFILE_AVATAR_IDS).optional(),
     }),
     z.object({
       firstName: requiredText(80),
       lastName: requiredText(80),
       email: optionalEmail,
-      profileIcon: z.string().trim().max(100).optional(),
+      profileIcon: z.enum(PROFILE_AVATAR_IDS).optional(),
     }),
   ]),
+  debugTokenPurchase: z.object({}).strict().optional().default({}),
   campaign: z.object({
     title: requiredText(120),
     description: z.string().trim().max(2000).optional(),
@@ -58,6 +60,16 @@ const schemas = {
     })).min(1).max(50),
   }),
   board: z.object({
+    playerName: requiredText(80),
+    selectedTiles: z.array(z.object({
+      categoryItemId: z.number().int().positive().nullable().optional(),
+      position: z.number().int().min(0).max(24),
+      isCenter: z.boolean().optional().default(false),
+      customText: z.string().trim().max(200).nullable().optional(),
+    })).min(1).max(25),
+    useDoubleOrNothing: z.boolean().optional().default(false),
+  }),
+  boardUpdate: z.object({
     playerName: requiredText(80),
     selectedTiles: z.array(z.object({
       categoryItemId: z.number().int().positive().nullable().optional(),

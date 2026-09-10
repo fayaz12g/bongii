@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Github, Volume2, VolumeX, Image as ImageIcon, PaintBucket, Snowflake } from "lucide-react";
+import { Github, Volume2, VolumeX, PaintBucket, Settings, Snowflake } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useMusic } from "./music";
 import { useBackground } from "./context";
@@ -30,8 +30,8 @@ const Footer = () => {
   ];
 
   return (
-    <footer className="relative mt-12 border-t border-line bg-[#10161d] py-5">
-      <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
+    <footer className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-[#10161d] py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] lg:relative lg:mt-12 lg:py-5">
+      <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
         <div className="flex items-center gap-3">
           {socialLinks.map(({ icon: Icon, href, label }) => (
             <a key={label} href={href} target="_blank" rel="noopener noreferrer" className="group p-2" aria-label={label} title={label}>
@@ -40,27 +40,27 @@ const Footer = () => {
           ))}
         </div>
 
-        <p className="text-sm text-muted">
+        <p className="hidden text-sm text-muted sm:block">
           Created by Fayaz, Not © {new Date().getFullYear()}.
         </p>
 
         <div className="flex items-end gap-3">
-          <button
-            type="button"
-            role="switch"
-            aria-checked={reduceMotion}
-            onClick={() => setReduceMotion(!reduceMotion)}
-            className="flex min-h-11 items-center gap-2 rounded-md border border-line bg-panel-strong px-3 text-sm font-medium text-white transition-colors hover:bg-slate-700"
-          >
-            <span>Reduce motion</span>
-            <span className={`relative h-6 w-11 rounded-full border transition-colors ${reduceMotion ? "border-focus bg-focus" : "border-line bg-page"}`} aria-hidden="true">
-              <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${reduceMotion ? "translate-x-5" : "translate-x-1"}`} />
-            </span>
-          </button>
-          {isHome && <div className="relative flex flex-col items-center">
+          <div className="relative flex flex-col items-center">
             {showMenu && (
-              <div className="absolute bottom-14 flex flex-col items-center space-y-3 rounded-md border border-line bg-panel p-3 shadow-xl">
-                {!showPresets && (
+              <div id="appearance-settings" className="absolute bottom-14 right-0 flex min-w-52 flex-col items-center space-y-3 rounded-md border border-line bg-panel p-3 shadow-xl">
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={reduceMotion}
+                  onClick={() => setReduceMotion(!reduceMotion)}
+                  className="flex min-h-11 w-full items-center justify-between gap-3 whitespace-nowrap text-sm font-medium text-white"
+                >
+                  <span>Reduce motion</span>
+                  <span className={`relative h-6 w-11 rounded-full border transition-colors ${reduceMotion ? "border-focus bg-focus" : "border-line bg-page"}`} aria-hidden="true">
+                    <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${reduceMotion ? "translate-x-5" : "translate-x-1"}`} />
+                  </span>
+                </button>
+                {isHome && !showPresets && (
                 <button
                   type="button"
                   onClick={() => setShowPresets((prev) => !prev)}
@@ -78,7 +78,7 @@ const Footer = () => {
                 </button>
                 )}
 
-                {!showPresets && (
+                {isHome && !showPresets && (
                 <button
                   type="button"
                   onClick={() => setShowGradient((prev) => !prev)}
@@ -93,7 +93,7 @@ const Footer = () => {
                 </button>
                 )}
 
-                {!showPresets && (
+                {isHome && !showPresets && (
                 <button
                   type="button"
                   onClick={() => setShowDots((prev) => !prev)}
@@ -108,7 +108,7 @@ const Footer = () => {
                 </button>
                 )}
 
-                {showPresets && (
+                {isHome && showPresets && (
                   <div className="grid grid-cols-3 gap-2">
                     {backgroundPresets.map((preset) => (
                       <button
@@ -141,13 +141,14 @@ const Footer = () => {
               type="button"
               onClick={() => setShowMenu((prev) => !prev)}
               className="flex h-11 w-11 items-center justify-center rounded-full border border-line bg-panel-strong text-white transition-colors hover:bg-slate-700"
-              aria-label="Background appearance"
+              aria-label={showMenu ? "Close settings" : "Open settings"}
               aria-expanded={showMenu}
-              title="Background appearance"
+              aria-controls="appearance-settings"
+              title="Settings"
             >
-              <ImageIcon className="w-6 h-6" />
+              <Settings className="w-6 h-6" />
             </button>
-          </div>}
+          </div>
 
           <button
             type="button"

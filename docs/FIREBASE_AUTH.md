@@ -15,6 +15,8 @@ Create separate Firebase projects for development and production. In each projec
 
 Firebase web configuration values identify a project but are not service credentials. Service-account values are private.
 
+Avatar uploads use Firebase Storage only after the Blaze plan, a budget alert, and the rollout review in [OPERATIONS.md](OPERATIONS.md) are complete. Deploy `client/storage.rules` before setting `NEXT_PUBLIC_ENABLE_AVATAR_UPLOAD=true`. Objects are owner-scoped under `avatars/{firebaseUid}/`; only supported image content at or below 2 MB is accepted, and the client additionally validates dimensions.
+
 ## 2. Configure development
 
 Copy `client/.env.example` to `client/.env.local` and fill in the development Web app values:

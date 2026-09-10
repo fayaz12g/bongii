@@ -19,7 +19,6 @@ const Header = () => {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
   const router = useRouter(); 
-  const { reduceMotion, setReduceMotion } = useBackground();
   const { isAuthenticated, loading, signOut } = useAuth();
 
   const toggleMenu = () => setIsOpen(!isOpen);
@@ -48,7 +47,6 @@ const menuItems = [
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
             <motion.div
-              initial={reduceMotion ? false : { opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               className="text-white font-bold text-xl"
             >
@@ -62,7 +60,7 @@ const menuItems = [
 
             {/* Desktop Menu */}
             <motion.div 
-              initial={reduceMotion ? false : { opacity: 0, x: 20 }}
+              initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               className="hidden lg:flex items-center gap-5"
             >
@@ -85,26 +83,15 @@ const menuItems = [
                   </Link>
                 )
               ))}
-              <button
-                type="button"
-                role="switch"
-                aria-checked={reduceMotion}
-                onClick={() => setReduceMotion(!reduceMotion)}
-                className="flex items-center gap-2 text-sm font-medium text-white"
-              >
-                <span>Reduce motion</span>
-                <span className={`relative h-6 w-11 rounded-full border transition-colors ${reduceMotion ? "border-focus bg-focus" : "border-line bg-panel-strong"}`} aria-hidden="true">
-                  <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white transition-transform ${reduceMotion ? "translate-x-5" : "translate-x-1"}`} />
-                </span>
-              </button>
             </motion.div>
 
-            {/* Mobile Menu Button */}
-            <div className="lg:hidden">
+            <div className="flex items-center gap-1">
               <button
                 type="button"
-                onClick={toggleMenu}
-                className="p-2 text-muted hover:text-white"
+                onClick={() => {
+                  toggleMenu();
+                }}
+                className="p-2 text-muted hover:text-white lg:hidden"
                 aria-label="Open navigation menu"
                 aria-expanded={isOpen}
               >
@@ -172,18 +159,6 @@ const menuItems = [
                   </motion.div>
                 );
               })}
-              <button
-                type="button"
-                role="switch"
-                aria-checked={reduceMotion}
-                onClick={() => setReduceMotion(!reduceMotion)}
-                className="flex items-center gap-3 text-xl font-medium text-white"
-              >
-                <span>Reduce motion</span>
-                <span className={`relative h-7 w-12 rounded-full border transition-colors ${reduceMotion ? "border-focus bg-focus" : "border-line bg-panel-strong"}`} aria-hidden="true">
-                  <span className={`absolute top-1 h-4 w-4 rounded-full bg-white transition-transform ${reduceMotion ? "translate-x-6" : "translate-x-1"}`} />
-                </span>
-              </button>
             </motion.div>
           </div>
         )}

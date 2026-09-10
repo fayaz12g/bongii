@@ -2,11 +2,13 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { Loader2, UserPlus } from "lucide-react";
+import { Loader2, LogIn, UserPlus } from "lucide-react";
 import Background from "../components/background";
 import { useAuth } from "../components/authContext";
 import Footer from "../components/footer";
+import ProfileAvatarPicker from "../components/profileAvatarPicker";
 import { safeReturnTo } from "../utils/authRedirect.mjs";
+import { DEFAULT_PROFILE_AVATAR_ID } from "../utils/profileAvatars.mjs";
 
 const readReturnTo = () => safeReturnTo(
   new URLSearchParams(window.location.search).get("returnTo"),
@@ -14,13 +16,15 @@ const readReturnTo = () => safeReturnTo(
 
 export default function RegisterPage() {
   const router = useRouter();
-  const { authError, registerWithEmail } = useAuth();
+  const { authError, registerWithEmail, signInWithGoogle } = useAuth();
   const [displayName, setDisplayName] = useState("");
   const [password, setPassword] = useState("");
   const [passwordConfirmation, setPasswordConfirmation] = useState("");
   const [email, setEmail] = useState("");
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [googleSubmitting, setGoogleSubmitting] = useState(false);
+  const [profileIcon, setProfileIcon] = useState(DEFAULT_PROFILE_AVATAR_ID);
   const isFormValid = Boolean(
     displayName.trim() && email && password.length >= 8 && password === passwordConfirmation,
   );
@@ -32,7 +36,13 @@ export default function RegisterPage() {
     setSubmitting(true);
     try {
       const returnTo = readReturnTo();
-      await registerWithEmail({ displayName: displayName.trim(), email, password, returnTo });
+      await registerWithEmail({
+        displayName: displayName.trim(),
+        email,
+        password,
+        profileIcon,
+        returnTo,
+      });
       router.push(`/verify-email?returnTo=${encodeURIComponent(returnTo)}`);
     } catch (requestError) {
       setError(requestError.message?.startsWith("Firebase is not configured")
@@ -40,6 +50,23 @@ export default function RegisterPage() {
         : "Registration could not be completed. Check your details and try again.");
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setError("");
+    setGoogleSubmitting(true);
+    try {
+      await signInWithGoogle();
+      router.replace(readReturnTo());
+    } catch (requestError) {
+      if (requestError.code !== "auth/popup-closed-by-user") {
+        setError(requestError.message?.startsWith("Firebase is not configured")
+          ? requestError.message
+          : "Google sign-in could not be completed.");
+      }
+    } finally {
+      setGoogleSubmitting(false);
     }
   };
 
@@ -51,7 +78,23 @@ export default function RegisterPage() {
         <h1 className="mb-2 text-center text-4xl font-bold text-white">
           Create account
         </h1>
-        <p className="mb-8 text-center text-muted">Use email or sign in with Google from the login page.</p>
+        <p className="mb-8 text-center text-muted">Choose Chippy or Lucky, or use your Google image.</p>
+
+        <button
+          type="button"
+          onClick={handleGoogleSignIn}
+          disabled={submitting || googleSubmitting || Boolean(authError)}
+          className="ui-button-secondary w-full"
+        >
+          {googleSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
+          Continue with Google
+        </button>
+
+        <div className="my-6 flex items-center gap-3 text-xs font-semibold uppercase text-muted">
+          <span className="h-px flex-1 bg-line" />
+          <span>or email</span>
+          <span className="h-px flex-1 bg-line" />
+        </div>
 
         <form className="space-y-6" onSubmit={handleSubmit}>
           <label htmlFor="register-name" className="block text-sm font-medium text-white">Display name</label>
@@ -65,6 +108,12 @@ export default function RegisterPage() {
             maxLength={160}
             className="ui-field"
             required
+          />
+
+          <ProfileAvatarPicker
+            disabled={submitting || googleSubmitting}
+            selectedId={profileIcon}
+            onSelect={setProfileIcon}
           />
 
           <label htmlFor="register-email" className="block text-sm font-medium text-white">Email</label>
@@ -114,7 +163,7 @@ export default function RegisterPage() {
 
             <button
               type="submit"
-              disabled={!isFormValid || submitting || Boolean(authError)}
+              disabled={!isFormValid || submitting || googleSubmitting || Boolean(authError)}
               className="ui-button-primary w-full"
             >
               {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}

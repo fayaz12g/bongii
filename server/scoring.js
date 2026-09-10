@@ -1,4 +1,6 @@
-const RULES_VERSION = 1;
+const { freeCenterPosition, hasFreeCenter } = require('./boardRules');
+
+const RULES_VERSION = 2;
 const SUPPORTED_BOARD_SIZES = new Set([3, 4, 5]);
 
 const compareText = (left, right) => {
@@ -59,8 +61,12 @@ const scoreBoard = ({ boardSize, tiles = [], outcomeByItemId = {} }) => {
   for (let position = 0; position < matchesByPosition.length; position += 1) {
     const tile = tileByPosition.get(position);
     if (!tile) continue;
-    if (tile.isCenter) {
+    if (tile.isCenter && hasFreeCenter(boardSize) && position === freeCenterPosition(boardSize)) {
       matchesByPosition[position] = true;
+      continue;
+    }
+    if (tile.isCenter) {
+      integrityWarnings.push({ code: 'unexpected_center', position });
       continue;
     }
     if (tile.categoryItemId === null || tile.categoryItemId === undefined) continue;

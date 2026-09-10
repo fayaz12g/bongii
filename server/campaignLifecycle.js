@@ -1,4 +1,5 @@
 const { DomainError } = require('./db');
+const { playableTileCount } = require('./boardRules');
 
 const ACTIONS = Object.freeze({
   publish: { from: 'draft', to: 'open' },
@@ -14,7 +15,7 @@ const selectableItemCount = (campaign) => campaign.categories.reduce(
 );
 
 const canPublish = (campaign) => (
-  selectableItemCount(campaign) >= (campaign.boardSize * campaign.boardSize) - 1
+  selectableItemCount(campaign) >= playableTileCount(campaign.boardSize)
 );
 
 const getAllowedActions = (campaign) => {
@@ -73,7 +74,7 @@ class CampaignLifecycle {
       throw new DomainError(`Cannot ${action} a ${campaign.status} campaign`, 409);
     }
     if (action === 'publish' && !canPublish(campaign)) {
-      const requiredItems = (campaign.boardSize * campaign.boardSize) - 1;
+      const requiredItems = playableTileCount(campaign.boardSize);
       throw new DomainError(`Campaign needs at least ${requiredItems} selectable items`, 409);
     }
     if (action === 'reopen' && campaign.moderationStartedAt) {

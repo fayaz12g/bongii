@@ -6,6 +6,7 @@ import Header from "../components/header";
 import Background from "../components/background";
 import Footer from "../components/footer";
 import { campaignService } from "../services/campaignService";
+import PlayerAvatar from "../components/playerAvatar";
 
 const statusLabels = {
   open: "Open",
@@ -75,7 +76,16 @@ export default function BrowseBoards() {
                         />
 
                         {/* Board Details */}
-                        <h3 className="text-2xl font-semibold mb-2">{board.playerName || "Unnamed Board"}</h3>
+                        <div className="mb-2 flex items-center gap-3">
+                          <PlayerAvatar
+                            avatar={board.playerAvatar}
+                            name={board.playerName}
+                            size={40}
+                          />
+                          <h3 className="min-w-0 break-words text-2xl font-semibold">
+                            {board.playerName || "Unnamed Board"}
+                          </h3>
+                        </div>
                         <p className="text-gray-300 mb-2 line-clamp-3">
                           Campaign: {campaignTitle}
                         </p>

@@ -91,6 +91,71 @@ test('correlates requests with redacted structured logs', async () => {
   assert.equal(serializedEntries.includes('header-secret-value'), false);
 });
 
+test('charges 10 tokens for campaign creation and supports mock debug purchases', async () => {
+  const context = await createTestContext();
+  contexts.push(context);
+  const user = await createUserAndToken(context.api, '-campaign-tokens');
+  assert.equal(user.registration.body.doubleOrNothingCredits, 10);
+
+  const firstCampaign = await context.api
+    .post('/api/campaigns')
+    .set('Authorization', `Bearer ${user.token}`)
+    .send(campaignPayload());
+  assert.equal(firstCampaign.status, 201);
+  assert.equal(firstCampaign.body.remainingDoubleOrNothingCredits, 0);
+
+  const rejectedCampaign = await context.api
+    .post('/api/campaigns')
+    .set('Authorization', `Bearer ${user.token}`)
+    .send(campaignPayload());
+  assert.equal(rejectedCampaign.status, 409);
+  assert.match(rejectedCampaign.body.error, /requires 10 tokens/i);
+  const campaignCount = await context.database.connection.get(
+    'SELECT COUNT(*) AS count FROM campaigns WHERE createdBy = ?',
+    [user.registration.body.id],
+  );
+  assert.equal(campaignCount.count, 1);
+
+  const paymentData = await context.api
+    .post('/api/users/current/debug-token-purchase')
+    .set('Authorization', `Bearer ${user.token}`)
+    .send({ cardNumber: 'not-accepted' });
+  assert.equal(paymentData.status, 400);
+
+  const purchase = await context.api
+    .post('/api/users/current/debug-token-purchase')
+    .set('Authorization', `Bearer ${user.token}`)
+    .send({});
+  assert.equal(purchase.status, 200);
+  assert.equal(purchase.body.tokensAdded, 100);
+  assert.equal(purchase.body.doubleOrNothingCredits, 100);
+
+  const secondCampaign = await context.api
+    .post('/api/campaigns')
+    .set('Authorization', `Bearer ${user.token}`)
+    .send(campaignPayload());
+  assert.equal(secondCampaign.status, 201);
+  assert.equal(secondCampaign.body.remainingDoubleOrNothingCredits, 90);
+});
+
+test('hides mock token purchases when the debug grant is disabled', async () => {
+  const context = await createTestContext({
+    config: {
+      firebaseProjectId: 'bongii-test',
+      enableDebugTokenPurchase: false,
+      allowedOrigins: ['http://localhost:3001'],
+    },
+  });
+  contexts.push(context);
+  const user = await createUserAndToken(context.api, '-debug-disabled');
+
+  const response = await context.api
+    .post('/api/users/current/debug-token-purchase')
+    .set('Authorization', `Bearer ${user.token}`);
+  assert.equal(response.status, 404);
+  assert.deepEqual(response.body, { error: 'Not found' });
+});
+
 test('creates a campaign and a complete board through the API', async () => {
   const context = await createTestContext();
   contexts.push(context);
@@ -148,12 +213,257 @@ test('creates a campaign and a complete board through the API', async () => {
   assert.deepEqual(savedBoard.body.tiles.map((tile) => tile.position), [0, 1, 2, 3, 4, 5, 6, 7, 8]);
   assert.equal(savedBoard.body.campaignStatus, 'open');
   assert.equal(savedBoard.body.campaignVersion, 2);
+  assert.deepEqual(savedBoard.body.currentScore, {
+    completedLineCount: 0,
+    longestRun: 1,
+    matchedTileCount: 1,
+  });
+  assert.deepEqual(savedBoard.body.playerAvatar, {
+    photoUrl: null,
+    profileIcon: 'chippy-1',
+  });
+});
+
+test('spends one Double or Nothing credit for one duplicated tile per board', async () => {
+  const context = await createTestContext();
+  contexts.push(context);
+  const owner = await createUserAndToken(context.api, '-double-or-nothing');
+  const player = await createUserAndToken(context.api, '-double-or-nothing-player');
+  assert.equal(player.registration.body.doubleOrNothingCredits, 10);
+
+  const created = await context.api
+    .post('/api/campaigns')
+    .set('Authorization', `Bearer ${owner.token}`)
+    .send(campaignPayload());
+  const campaign = created.body.campaign;
+  await context.api
+    .post(`/api/campaigns/${campaign.code}/publish`)
+    .set('Authorization', `Bearer ${owner.token}`);
+
+  const doubleOrNothingPayload = (playerName) => {
+    const payload = boardPayloadFor(campaign, playerName);
+    payload.selectedTiles[0].categoryItemId = payload.selectedTiles[1].categoryItemId;
+    payload.useDoubleOrNothing = true;
+    return payload;
+  };
+
+  const anonymous = await context.api
+    .post(`/api/campaigns/${campaign.code}/board`)
+    .send(doubleOrNothingPayload('Anonymous'));
+  assert.equal(anonymous.status, 401);
+  assert.match(anonymous.body.error, /sign in/i);
+
+  const missingOptInPayload = doubleOrNothingPayload('Missing opt-in');
+  delete missingOptInPayload.useDoubleOrNothing;
+  const missingOptIn = await context.api
+    .post(`/api/campaigns/${campaign.code}/board`)
+    .set('Authorization', `Bearer ${player.token}`)
+    .send(missingOptInPayload);
+  assert.equal(missingOptIn.status, 400);
+  assert.match(missingOptIn.body.error, /unique campaign items/i);
+
+  const twoDuplicatesPayload = doubleOrNothingPayload('Two duplicates');
+  twoDuplicatesPayload.selectedTiles[2].categoryItemId = twoDuplicatesPayload.selectedTiles[3].categoryItemId;
+  const twoDuplicates = await context.api
+    .post(`/api/campaigns/${campaign.code}/board`)
+    .set('Authorization', `Bearer ${player.token}`)
+    .send(twoDuplicatesPayload);
+  assert.equal(twoDuplicates.status, 400);
+  assert.match(twoDuplicates.body.error, /unique campaign items/i);
+
+  let firstBoardCode;
+  for (let credit = 10; credit > 0; credit -= 1) {
+    const board = await context.api
+      .post(`/api/campaigns/${campaign.code}/board`)
+      .set('Authorization', `Bearer ${player.token}`)
+      .send(doubleOrNothingPayload(`Double Player ${credit}`));
+    assert.equal(board.status, 201);
+    assert.equal(board.body.remainingDoubleOrNothingCredits, credit - 1);
+    firstBoardCode ||= board.body.boardCode;
+  }
+
+  const savedBoard = await context.api.get(`/api/boards/${firstBoardCode}`);
+  assert.equal(savedBoard.body.usedDoubleOrNothing, true);
+  const duplicateIds = savedBoard.body.tiles
+    .filter((tile) => !tile.isCenter)
+    .map((tile) => tile.categoryItemId);
+  assert.equal(new Set(duplicateIds).size, duplicateIds.length - 1);
+
+  const edited = await context.api
+    .put(`/api/boards/${firstBoardCode}`)
+    .set('Authorization', `Bearer ${player.token}`)
+    .send(doubleOrNothingPayload('Edited Double Player'));
+  assert.equal(edited.status, 200);
+
+  const exhausted = await context.api
+    .post(`/api/campaigns/${campaign.code}/board`)
+    .set('Authorization', `Bearer ${player.token}`)
+    .send(doubleOrNothingPayload('No Credits'));
+  assert.equal(exhausted.status, 409);
+  assert.match(exhausted.body.error, /no Double or Nothing credits/i);
+
+  const normalBoard = await context.api
+    .post(`/api/campaigns/${campaign.code}/board`)
+    .set('Authorization', `Bearer ${player.token}`)
+    .send(boardPayloadFor(campaign, 'Normal Player'));
+  assert.equal(normalBoard.status, 201);
+  assert.equal(Object.hasOwn(normalBoard.body, 'remainingDoubleOrNothingCredits'), false);
+
+  const profile = await context.api
+    .get('/api/users/current')
+    .set('Authorization', `Bearer ${player.token}`);
+  assert.equal(profile.body.doubleOrNothingCredits, 0);
+});
+
+test('creates and scores a 4 by 4 board without a free tile', async () => {
+  const context = await createTestContext();
+  contexts.push(context);
+  const owner = await createUserAndToken(context.api, '-four-by-four');
+  const payload = campaignPayload();
+  payload.boardSize = 4;
+  payload.categories[0].items = Array.from(
+    { length: 16 },
+    (_, index) => `Four by four prediction ${index + 1}`,
+  );
+
+  const created = await context.api
+    .post('/api/campaigns')
+    .set('Authorization', `Bearer ${owner.token}`)
+    .send(payload);
+  assert.equal(created.status, 201);
+  assert.deepEqual(created.body.campaign.allowedActions, ['publish', 'cancel']);
+  const campaign = created.body.campaign;
+  await context.api
+    .post(`/api/campaigns/${campaign.code}/publish`)
+    .set('Authorization', `Bearer ${owner.token}`);
+
+  const boardPayload = boardPayloadFor(campaign, 'Even Board');
+  assert.equal(boardPayload.selectedTiles.length, 16);
+  assert.equal(boardPayload.selectedTiles.some((tile) => tile.isCenter), false);
+  const board = await context.api
+    .post(`/api/campaigns/${campaign.code}/board`)
+    .send(boardPayload);
+  assert.equal(board.status, 201);
+
+  const snapshot = await context.api.get(`/api/boards/${board.body.boardCode}`);
+  assert.equal(snapshot.body.tiles.length, 16);
+  assert.equal(snapshot.body.tiles.some((tile) => tile.isCenter), false);
+
+  const invalidPayload = structuredClone(boardPayload);
+  invalidPayload.selectedTiles[8] = {
+    position: 8,
+    isCenter: true,
+    categoryItemId: null,
+    customText: 'FREE SPACE',
+  };
+  const invalid = await context.api
+    .post(`/api/campaigns/${campaign.code}/board`)
+    .send(invalidPayload);
+  assert.equal(invalid.status, 400);
+  assert.match(invalid.body.error, /cannot contain a center tile/i);
+});
+
+test('authorizes board editing by owner or anonymous edit token only while open', async () => {
+  const context = await createTestContext();
+  contexts.push(context);
+  const owner = await createUserAndToken(context.api, '-board-owner');
+  const otherUser = await createUserAndToken(context.api, '-board-other');
+  const created = await context.api
+    .post('/api/campaigns')
+    .set('Authorization', `Bearer ${owner.token}`)
+    .send(campaignPayload());
+  const campaign = created.body.campaign;
+  await context.api
+    .post(`/api/campaigns/${campaign.code}/publish`)
+    .set('Authorization', `Bearer ${owner.token}`);
+
+  const anonymousPayload = boardPayloadFor(campaign, 'Anonymous Player');
+  const anonymous = await context.api
+    .post(`/api/campaigns/${campaign.code}/board`)
+    .send(anonymousPayload);
+  assert.equal(anonymous.status, 201);
+  assert.match(anonymous.body.editToken, /^[A-Za-z0-9_-]{43}$/);
+  const storedAnonymous = await context.database.connection.get(
+    'SELECT userId, editTokenHash FROM playerBoards WHERE boardCode = ?',
+    [anonymous.body.boardCode],
+  );
+  assert.equal(storedAnonymous.userId, null);
+  assert.notEqual(storedAnonymous.editTokenHash, anonymous.body.editToken);
+  assert.equal(storedAnonymous.editTokenHash.length, 64);
+
+  const publicSnapshot = await context.api.get(`/api/boards/${anonymous.body.boardCode}`);
+  assert.equal(publicSnapshot.body.canEdit, false);
+  assert.equal(Object.hasOwn(publicSnapshot.body, 'editTokenHash'), false);
+  const editableSnapshot = await context.api
+    .get(`/api/boards/${anonymous.body.boardCode}`)
+    .set('X-Board-Edit-Token', anonymous.body.editToken);
+  assert.equal(editableSnapshot.body.canEdit, true);
+
+  const anonymousUpdate = boardPayloadFor(campaign, 'Edited Anonymous Player');
+  const deniedAnonymousUpdate = await context.api
+    .put(`/api/boards/${anonymous.body.boardCode}`)
+    .set('X-Board-Edit-Token', 'wrong-token')
+    .send(anonymousUpdate);
+  assert.equal(deniedAnonymousUpdate.status, 403);
+  const updatedAnonymous = await context.api
+    .put(`/api/boards/${anonymous.body.boardCode}`)
+    .set('X-Board-Edit-Token', anonymous.body.editToken)
+    .send(anonymousUpdate);
+  assert.equal(updatedAnonymous.status, 200);
+  assert.equal(updatedAnonymous.body.board.playerName, 'Edited Anonymous Player');
+
+  const signedInPayload = boardPayloadFor(campaign, 'Signed In Player');
+  const signedIn = await context.api
+    .post(`/api/campaigns/${campaign.code}/board`)
+    .set('Authorization', `Bearer ${owner.token}`)
+    .send(signedInPayload);
+  assert.equal(signedIn.status, 201);
+  assert.equal(Object.hasOwn(signedIn.body, 'editToken'), false);
+  const storedSignedIn = await context.database.connection.get(
+    'SELECT userId, editTokenHash FROM playerBoards WHERE boardCode = ?',
+    [signedIn.body.boardCode],
+  );
+  assert.equal(storedSignedIn.userId, owner.registration.body.id);
+  assert.equal(storedSignedIn.editTokenHash, null);
+
+  const duplicateUpdate = boardPayloadFor(campaign, 'Signed In Player');
+  duplicateUpdate.selectedTiles[0].categoryItemId = duplicateUpdate.selectedTiles[1].categoryItemId;
+  const duplicate = await context.api
+    .put(`/api/boards/${signedIn.body.boardCode}`)
+    .set('Authorization', `Bearer ${owner.token}`)
+    .send(duplicateUpdate);
+  assert.equal(duplicate.status, 400);
+  assert.match(duplicate.body.error, /unique campaign items/i);
+  const deniedOwnerUpdate = await context.api
+    .put(`/api/boards/${signedIn.body.boardCode}`)
+    .set('Authorization', `Bearer ${otherUser.token}`)
+    .send(signedInPayload);
+  assert.equal(deniedOwnerUpdate.status, 403);
+  const updatedOwner = await context.api
+    .put(`/api/boards/${signedIn.body.boardCode}`)
+    .set('Authorization', `Bearer ${owner.token}`)
+    .send({ ...signedInPayload, playerName: 'Profile Owner' });
+  assert.equal(updatedOwner.status, 200);
+  assert.equal(updatedOwner.body.board.playerName, 'Profile Owner');
+
+  await context.api
+    .post(`/api/campaigns/${campaign.code}/lock`)
+    .set('Authorization', `Bearer ${owner.token}`);
+  const afterLock = await context.api
+    .put(`/api/boards/${anonymous.body.boardCode}`)
+    .set('X-Board-Edit-Token', anonymous.body.editToken)
+    .send(anonymousUpdate);
+  assert.equal(afterLock.status, 409);
 });
 
 test('filters public campaigns by browse group and literal title search', async () => {
   const context = await createTestContext();
   contexts.push(context);
   const owner = await createUserAndToken(context.api, '-browse');
+  await context.api
+    .post('/api/users/current/debug-token-purchase')
+    .set('Authorization', `Bearer ${owner.token}`)
+    .send({});
 
   const createCampaign = async (title) => {
     const payload = campaignPayload();
@@ -376,6 +686,10 @@ test('stores owner-controlled item outcomes and returns them in board snapshots'
   const itemId = campaign.categories[0].items[0].id;
   const otherCampaignPayload = campaignPayload();
   otherCampaignPayload.title = 'Other Outcome Campaign';
+  await context.api
+    .post('/api/users/current/debug-token-purchase')
+    .set('Authorization', `Bearer ${owner.token}`)
+    .send({});
   const otherCampaignResponse = await context.api
     .post('/api/campaigns')
     .set('Authorization', `Bearer ${owner.token}`)
@@ -492,10 +806,16 @@ test('finalizes once, resolves pending outcomes, and publishes deterministic res
   contexts.push(context);
   const owner = await createUserAndToken(context.api, '-finalize-owner');
   const otherUser = await createUserAndToken(context.api, '-finalize-other');
+  const thirdUser = await createUserAndToken(context.api, '-finalize-third');
+  const payload = campaignPayload();
+  payload.categories[0].items = Array.from(
+    { length: 10 },
+    (_, index) => `Final prediction ${index + 1}`,
+  );
   const created = await context.api
     .post('/api/campaigns')
     .set('Authorization', `Bearer ${owner.token}`)
-    .send(campaignPayload());
+    .send(payload);
   const campaign = created.body.campaign;
   const finalizePath = `/api/campaigns/${campaign.code}/finalize`;
 
@@ -515,17 +835,22 @@ test('finalizes once, resolves pending outcomes, and publishes deterministic res
     boardPayloadFor(campaign, 'Ada'),
     boardPayloadFor(campaign, 'Lee'),
   ];
-  const leePositionTwo = boardPayloads[2].selectedTiles.find((tile) => tile.position === 2);
-  const leePositionFive = boardPayloads[2].selectedTiles.find((tile) => tile.position === 5);
-  [leePositionTwo.categoryItemId, leePositionFive.categoryItemId] = [
-    leePositionFive.categoryItemId,
-    leePositionTwo.categoryItemId,
-  ];
+  boardPayloads[1].selectedTiles.find((tile) => tile.position === 2).categoryItemId = (
+    campaign.categories[0].items[8].id
+  );
+  boardPayloads[2].selectedTiles.find((tile) => tile.position === 1).categoryItemId = (
+    campaign.categories[0].items[8].id
+  );
+  boardPayloads[2].selectedTiles.find((tile) => tile.position === 2).categoryItemId = (
+    campaign.categories[0].items[9].id
+  );
   const boardResponses = [];
-  for (const payload of boardPayloads) {
+  const boardOwners = [owner, otherUser, thirdUser];
+  for (const [index, boardPayload] of boardPayloads.entries()) {
     boardResponses.push(await context.api
       .post(`/api/campaigns/${campaign.code}/board`)
-      .send(payload));
+      .set('Authorization', `Bearer ${boardOwners[index].token}`)
+      .send(boardPayload));
   }
   assert.deepEqual(boardResponses.map((response) => response.status), [201, 201, 201]);
 
@@ -556,7 +881,7 @@ test('finalizes once, resolves pending outcomes, and publishes deterministic res
   assert.equal(concurrentFinalize.status, 200);
   assert.deepEqual(
     [firstFinalize.body.pendingResolved, concurrentFinalize.body.pendingResolved].sort(),
-    [0, 5],
+    [0, 7],
   );
   assert.deepEqual(
     [firstFinalize.body.alreadyFinalized, concurrentFinalize.body.alreadyFinalized].sort(),
@@ -564,7 +889,7 @@ test('finalizes once, resolves pending outcomes, and publishes deterministic res
   );
   assert.equal(firstFinalize.body.result.campaign.status, 'completed');
   assert.equal(firstFinalize.body.result.campaign.version, 8);
-  assert.equal(firstFinalize.body.result.campaign.rulesVersion, 1);
+  assert.equal(firstFinalize.body.result.campaign.rulesVersion, 2);
   assert.deepEqual(firstFinalize.body.result.results.map((result) => ({
     playerName: result.playerName,
     rank: result.rank,
@@ -572,11 +897,20 @@ test('finalizes once, resolves pending outcomes, and publishes deterministic res
     longestRun: result.longestRun,
     completedLineCount: result.completedLineCount,
     matchedTileCount: result.matchedTileCount,
+    creditsAwarded: result.creditsAwarded,
   })), [
-    { playerName: 'Ada', rank: 1, sharedRank: true, longestRun: 3, completedLineCount: 1, matchedTileCount: 4 },
-    { playerName: 'Sam', rank: 1, sharedRank: true, longestRun: 3, completedLineCount: 1, matchedTileCount: 4 },
-    { playerName: 'Lee', rank: 3, sharedRank: false, longestRun: 2, completedLineCount: 0, matchedTileCount: 4 },
+    { playerName: 'Sam', rank: 1, sharedRank: false, longestRun: 3, completedLineCount: 1, matchedTileCount: 4, creditsAwarded: 3 },
+    { playerName: 'Ada', rank: 2, sharedRank: false, longestRun: 2, completedLineCount: 0, matchedTileCount: 3, creditsAwarded: 1 },
+    { playerName: 'Lee', rank: 3, sharedRank: false, longestRun: 2, completedLineCount: 0, matchedTileCount: 2, creditsAwarded: 1 },
   ]);
+
+  const balancesAfterFinalization = await Promise.all([owner, otherUser, thirdUser].map(async (user) => {
+    const profile = await context.api
+      .get('/api/users/current')
+      .set('Authorization', `Bearer ${user.token}`);
+    return profile.body.doubleOrNothingCredits;
+  }));
+  assert.deepEqual(balancesAfterFinalization, [3, 11, 11]);
 
   const storedCounts = await Promise.all([
     context.database.connection.get('SELECT COUNT(*) AS count FROM campaignResults'),
@@ -587,14 +921,8 @@ test('finalizes once, resolves pending outcomes, and publishes deterministic res
     'SELECT status FROM campaignCategoryItems ORDER BY id',
   );
   assert.deepEqual(outcomes.map(({ status }) => status), [
-    'happened',
-    'happened',
-    'happened',
-    'did_not_happen',
-    'did_not_happen',
-    'did_not_happen',
-    'did_not_happen',
-    'did_not_happen',
+    ...Array(3).fill('happened'),
+    ...Array(7).fill('did_not_happen'),
   ]);
 
   const publicResults = await context.api.get(`/api/campaigns/${campaign.code}/results?page=1`);
@@ -632,6 +960,13 @@ test('finalizes once, resolves pending outcomes, and publishes deterministic res
   assert.equal(repeatedFinalize.status, 200);
   assert.equal(repeatedFinalize.body.alreadyFinalized, true);
   assert.deepEqual(repeatedFinalize.body.result, publicResults.body);
+  const balancesAfterRetry = await Promise.all([owner, otherUser, thirdUser].map(async (user) => {
+    const profile = await context.api
+      .get('/api/users/current')
+      .set('Authorization', `Bearer ${user.token}`);
+    return profile.body.doubleOrNothingCredits;
+  }));
+  assert.deepEqual(balancesAfterRetry, [3, 11, 11]);
 
   const metrics = await context.api.get('/api/metrics');
   assert.match(metrics.text, /bongii_finalization_duration_seconds_count 5/);

@@ -8,6 +8,7 @@ export default function ConfirmDialog({
   title,
   description,
   confirmLabel,
+  cancelLabel = "Keep editing",
   tone = "primary",
   busy = false,
   onCancel,
@@ -54,7 +55,7 @@ export default function ConfirmDialog({
       <p id={descriptionId} className="mt-4 text-sm leading-6 text-muted">{description}</p>
       <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
         <button type="button" onClick={onCancel} disabled={busy} className="ui-button-secondary">
-          Keep editing
+          {cancelLabel}
         </button>
         <button
           type="button"

@@ -26,4 +26,10 @@ export const profileService = {
     return Promise.resolve(res);
   },
 
+  async purchaseDebugTokens() {
+    return authenticatedApiFetch('/users/current/debug-token-purchase', {
+      method: "POST",
+    });
+  },
+
 }

@@ -88,10 +88,10 @@ test('migrates a legacy schema once without losing campaign data', async () => {
         FOREIGN KEY (categoryItemId) REFERENCES campaignCategoryItems(id),
         UNIQUE(boardId, position)
       );
-      INSERT INTO users (username, password, firstName, lastName)
+      INSERT INTO users (username, password, firstName, lastName, profileIcon)
       VALUES
-        ('legacy', 'plaintext', 'Legacy', 'Owner'),
-        ('unused', 'plaintext', 'Unused', 'Account');
+        ('legacy', 'plaintext', 'Legacy', 'Owner', '2'),
+        ('unused', 'plaintext', 'Unused', 'Account', '4');
       INSERT INTO campaigns
         (code, title, backgroundPreset, boardSize, startDateTime, status, createdBy, createdAt)
       VALUES
@@ -209,11 +209,12 @@ test('migrates a legacy schema once without losing campaign data', async () => {
         'longestRun',
         'completedLineCount',
         'matchedTileCount',
+        'doubleOrNothingCreditsAwarded',
       ],
     );
 
     const migratedUser = await database.connection.get(`
-      SELECT firebaseUid, displayName, photoUrl, legacyUsername
+      SELECT firebaseUid, displayName, photoUrl, legacyUsername, profileIcon
       FROM users
       WHERE id = 1
     `);
@@ -222,6 +223,7 @@ test('migrates a legacy schema once without losing campaign data', async () => {
       displayName: 'Legacy Owner',
       photoUrl: null,
       legacyUsername: 'legacy',
+      profileIcon: 'chippy-2',
     });
     const migratedUsers = await database.connection.all(
       'SELECT id, username FROM users ORDER BY id',
@@ -229,6 +231,15 @@ test('migrates a legacy schema once without losing campaign data', async () => {
     assert.deepEqual(migratedUsers, [{ id: 1, username: 'legacy' }]);
     const userColumns = await database.connection.all('PRAGMA table_info(users)');
     assert.equal(userColumns.some((column) => column.name === 'password'), false);
+    const migratedCredits = await database.connection.get(
+      'SELECT doubleOrNothingCredits FROM users WHERE id = 1',
+    );
+    assert.deepEqual(migratedCredits, { doubleOrNothingCredits: 10 });
+    const migratedBoardUsage = await database.connection.get(
+      'SELECT usedDoubleOrNothing FROM playerBoards WHERE boardCode = ?',
+      ['KEEP'],
+    );
+    assert.deepEqual(migratedBoardUsage, { usedDoubleOrNothing: 0 });
     assert.equal(campaign.createdBy, 1);
 
     await assert.rejects(
@@ -255,6 +266,10 @@ test('migrates a legacy schema once without losing campaign data', async () => {
         '005_firebase_identity.js',
         '006_clear_pending_outcome_dates.js',
         '007_remove_legacy_password.js',
+        '008_board_edit_tokens.js',
+        '009_double_or_nothing.js',
+        '010_result_credit_awards.js',
+        '011_profile_avatars.js',
       ],
     );
     await database.close();
@@ -331,6 +346,10 @@ test('preserves pre-existing orphan rows while applying the lifecycle migration'
         '005_firebase_identity.js',
         '006_clear_pending_outcome_dates.js',
         '007_remove_legacy_password.js',
+        '008_board_edit_tokens.js',
+        '009_double_or_nothing.js',
+        '010_result_credit_awards.js',
+        '011_profile_avatars.js',
       ],
     );
 

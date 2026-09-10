@@ -8,7 +8,7 @@ import Footer from "../components/footer";
 import { campaignService } from "../services/campaignService";
 import Header from "../components/header";
 import { useRequireAuth } from "../hooks/useRequireAuth";
-import { Plus, X, Trash2, Palette, Grid3X3, Square, SquareStack, Check, Sparkles, Wand2, ChevronLeft, ChevronRight, Download, Upload } from "lucide-react";
+import { Plus, X, Trash2, Palette, Grid3X3, Square, SquareStack, Check, Sparkles, Wand2, ChevronLeft, ChevronRight, Download, Upload, Coins } from "lucide-react";
 import { downloadExampleCampaign, parseCampaignImport } from "./campaignImport.mjs";
 
 
@@ -30,7 +30,7 @@ const boardSizes = [
 
 export default function CreateCampaign() {
   const router = useRouter();
-  useRequireAuth();
+  const { firebaseUser, profile, syncProfile } = useRequireAuth();
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(1); // 1: Basic Info, 2: Categories, 3: Review
   
@@ -222,6 +222,10 @@ useEffect(() => {
 
   const handleCreateCampaign = async () => {
     setCreationError("");
+    if ((profile?.doubleOrNothingCredits ?? 0) < 10) {
+      setCreationError("Campaign creation requires 10 tokens.");
+      return;
+    }
     setLoading(true);
     try {
       const campaignData = {
@@ -242,6 +246,11 @@ useEffect(() => {
       const response = await campaignService.createCampaign(campaignData);
       if (response.ok) {
         const data = await response.json();
+        if (data.remainingDoubleOrNothingCredits !== undefined && firebaseUser) {
+          syncProfile(firebaseUser).catch((profileError) => {
+            console.error("Error refreshing token balance:", profileError);
+          });
+        }
         router.push(`/moderate/${data.campaign.code}`);
       } else {
         const data = await response.json().catch(() => ({}));
@@ -275,7 +284,7 @@ useEffect(() => {
     }
   };
 
-  const requiredItemCount = (boardSize * boardSize) - 1;
+  const requiredItemCount = (boardSize * boardSize) - (boardSize % 2 === 1 ? 1 : 0);
   const selectableItemCount = categories.reduce(
     (total, category) => total + category.items.length,
     0,
@@ -315,6 +324,10 @@ useEffect(() => {
             </div>
             <div className="text-center">
               <h1 className="text-3xl font-bold text-white mb-2">Create Campaign</h1>
+              <p className="mb-2 inline-flex items-center gap-1.5 text-sm font-semibold text-amber-200">
+                <Coins className="h-4 w-4" aria-hidden="true" />
+                10 tokens · {profile?.doubleOrNothingCredits ?? 0} available
+              </p>
               <p className="sr-only">Step {step} of 4</p>
               <div className="flex items-center space-x-2" aria-hidden="true">
                 {[1, 2, 3, 4].map((s) => (
@@ -944,10 +957,10 @@ useEffect(() => {
                     whileHover={{ scale: 1.05 }}
                     whileTap={{ scale: 0.97 }}
                     onClick={handleCreateCampaign}
-                    disabled={loading || !hasEnoughItems}
+                    disabled={loading || !hasEnoughItems || (profile?.doubleOrNothingCredits ?? 0) < 10}
                     className="ui-button-primary"
                   >
-                    {loading ? "Creating..." : "Create Campaign"}
+                    {loading ? "Creating..." : "Create Campaign · 10 tokens"}
                   </motion.button>
                 </div>
               </motion.div>

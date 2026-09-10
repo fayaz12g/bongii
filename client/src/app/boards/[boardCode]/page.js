@@ -1,17 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { Check, CircleDashed, RefreshCw, Trophy, User, Wifi, WifiOff, X } from "lucide-react";
+import { Check, CircleDashed, Pencil, RefreshCw, Trophy, Wifi, WifiOff, X } from "lucide-react";
 import { campaignService } from "../../services/campaignService";
 import Background from "@/app/components/background";
 import Header from "@/app/components/header";
 import Footer from "@/app/components/footer";
+import PlayerAvatar from "@/app/components/playerAvatar";
 import { useBackground } from "../../components/context";
 import { useCampaignRealtime } from "../../hooks/useCampaignRealtime";
+import { useAuth } from "../../components/authContext";
 import {
   applyBoardOutcome,
+  getBongAnnouncement,
   getCompletedLinePositions,
   getCompletedLines,
 } from "../../utils/campaignRealtime.mjs";
@@ -56,14 +59,25 @@ export default function PlayerBoardPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [changedOutcome, setChangedOutcome] = useState(null);
-  const { setSelectedPreset } = useBackground();
+  const [bongAnnouncement, setBongAnnouncement] = useState("");
+  const boardDataRef = useRef(null);
+  const { reduceMotion, setSelectedPreset } = useBackground();
+  const { loading: authLoading } = useAuth();
 
-  const refreshBoard = async () => {
+  const commitBoard = (data, { live = false } = {}) => {
+    const announcement = getBongAnnouncement(boardDataRef.current, data, { live });
+    boardDataRef.current = data;
+    setBoardData(data);
+    if (announcement) setBongAnnouncement(announcement);
+  };
+
+  const refreshBoard = async ({ live = false } = {}) => {
     const response = await campaignService.getPlayerBoard(boardCode);
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Failed to refresh board");
-    setBoardData(data);
+    commitBoard(data, { live });
     setSelectedPreset(data.backgroundPreset);
+    return data;
   };
 
   useEffect(() => {
@@ -74,7 +88,7 @@ export default function PlayerBoardPage() {
         const data = await res.json();
         if (!active) return;
         if (res.ok) {
-          setBoardData(data);
+          commitBoard(data);
           setSelectedPreset(data.backgroundPreset);
         } else if (res.status === 404) {
           setError("Board not found");
@@ -89,11 +103,11 @@ export default function PlayerBoardPage() {
       }
     };
 
-    if (boardCode) fetchBoard();
+    if (boardCode && !authLoading) fetchBoard();
     return () => {
       active = false;
     };
-  }, [boardCode, setSelectedPreset]);
+  }, [authLoading, boardCode, setSelectedPreset]);
 
   useEffect(() => {
     if (!changedOutcome) return undefined;
@@ -101,20 +115,29 @@ export default function PlayerBoardPage() {
     return () => window.clearTimeout(timeout);
   }, [changedOutcome]);
 
+  useEffect(() => {
+    if (!bongAnnouncement) return undefined;
+    const timeout = window.setTimeout(() => setBongAnnouncement(""), 1800);
+    return () => window.clearTimeout(timeout);
+  }, [bongAnnouncement]);
+
   const { connectionState, reconnect } = useCampaignRealtime({
     campaignCode: boardData?.campaignCode,
     campaignVersion: boardData?.campaignVersion,
-    onFinalized: refreshBoard,
+    onFinalized: () => refreshBoard(),
     onOutcome(event) {
-      if (boardData?.tiles.some((tile) => tile.categoryItemId === event.itemId)) {
+      if (boardDataRef.current?.tiles.some((tile) => tile.categoryItemId === event.itemId)) {
         setChangedOutcome({ itemId: event.itemId, version: event.campaignVersion });
+        return refreshBoard({ live: true });
       }
       setBoardData((current) => {
         const result = applyBoardOutcome(current, event);
+        boardDataRef.current = result.snapshot;
         return result.snapshot;
       });
+      return undefined;
     },
-    onRefreshRequested: refreshBoard,
+    onRefreshRequested: () => refreshBoard(),
     onStatus(event) {
       setBoardData((current) => (
         !current || event.campaignVersion <= current.campaignVersion
@@ -125,6 +148,13 @@ export default function PlayerBoardPage() {
               campaignVersion: event.campaignVersion,
             }
       ));
+      if (boardDataRef.current && event.campaignVersion > boardDataRef.current.campaignVersion) {
+        boardDataRef.current = {
+          ...boardDataRef.current,
+          campaignStatus: event.status,
+          campaignVersion: event.campaignVersion,
+        };
+      }
     },
   });
 
@@ -200,6 +230,26 @@ export default function PlayerBoardPage() {
           </div>
         </div>
         <p className="text-gray-300 mb-6">{campaignStatus.message}</p>
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-y border-white/20 py-3">
+          <div className="flex items-center gap-3">
+            <PlayerAvatar avatar={boardData.playerAvatar} name={boardData.playerName} size={44} />
+            <div>
+              <p className="font-semibold text-white">{boardData.playerName}</p>
+              <p className="text-sm text-gray-300">
+                {boardData.currentScore?.completedLineCount || 0} {(boardData.currentScore?.completedLineCount || 0) === 1 ? "Bong" : "Bongs"}
+              </p>
+            </div>
+          </div>
+          {boardData.canEdit && boardData.campaignStatus === "open" && (
+            <Link
+              href={`/${boardData.campaignCode}?edit=${boardData.boardCode}`}
+              className="ui-button-secondary"
+            >
+              <Pencil className="h-4 w-4" aria-hidden="true" />
+              Edit board
+            </Link>
+          )}
+        </div>
         {boardData.campaignStatus === "completed" && (
           <Link
             href={`/leaderboards/${boardData.campaignCode}`}
@@ -216,6 +266,14 @@ export default function PlayerBoardPage() {
           role="grid"
           aria-label={`${campaignTitle} board`}
         >
+          {bongAnnouncement && (
+            <div
+              className={`bong-announcement pointer-events-none absolute left-1/2 top-3 z-30 -translate-x-1/2 border-2 border-focus bg-page px-5 py-2 text-xl font-black text-white shadow-xl ${reduceMotion ? "bong-announcement-static" : ""}`}
+              aria-hidden="true"
+            >
+              {bongAnnouncement}
+            </div>
+          )}
           {Array.from({ length: boardSize }, (_, rowIndex) => (
             <div key={rowIndex} role="row" className="contents">
               {tiles.slice(rowIndex * boardSize, (rowIndex + 1) * boardSize).map((cell) => {
@@ -238,7 +296,12 @@ export default function PlayerBoardPage() {
                   >
                     {cell.isCenter ? (
                       <div className="relative z-20 text-center">
-                        <User className="w-5 h-5 sm:w-6 sm:h-6 mx-auto mb-1" aria-hidden="true" />
+                        <PlayerAvatar
+                          avatar={boardData.playerAvatar}
+                          name={boardData.playerName}
+                          size={28}
+                          className="mx-auto mb-1"
+                        />
                         <div className="text-xs break-words">{boardData.playerName || "Free Space"}</div>
                       </div>
                     ) : cell.categoryItemId ? (
@@ -299,6 +362,7 @@ export default function PlayerBoardPage() {
             </svg>
           )}
         </div>
+        <p className="sr-only" aria-live="polite" aria-atomic="true">{bongAnnouncement}</p>
       </main>
       <Footer />
     </div>
