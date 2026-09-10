@@ -48,8 +48,11 @@ const auditAuthUsers = async (databasePath = config.databasePath) => {
   try {
     const columns = await connection.all('PRAGMA table_info(users)');
     const hasFirebaseUid = columns.some((column) => column.name === 'firebaseUid');
+    const hasPassword = columns.some((column) => column.name === 'password');
     const users = await connection.all(
-      `SELECT email, password${hasFirebaseUid ? ', firebaseUid' : ', NULL AS firebaseUid'} FROM users`,
+      `SELECT email${hasPassword ? ', password' : ', NULL AS password'}${
+        hasFirebaseUid ? ', firebaseUid' : ', NULL AS firebaseUid'
+      } FROM users`,
     );
     return summarizeUsers(users);
   } finally {

@@ -2,8 +2,6 @@ const { applicationDefault, cert, getApps, initializeApp } = require('firebase-a
 const { getAuth } = require('firebase-admin/auth');
 
 const createFirebaseTokenVerifier = (config) => {
-  if ((config.authMode || 'legacy') === 'legacy') return null;
-
   const appName = `bongii-${config.firebaseProjectId}`;
   let app = getApps().find((candidate) => candidate.name === appName);
   if (!app) {

@@ -109,6 +109,21 @@ test('migrates a legacy schema once without losing campaign data', async () => {
     `);
     await legacy.close();
 
+    await assert.rejects(
+      BongiiDatabase.open(databasePath),
+      /every account is Firebase-linked and password-free/,
+    );
+    const prepared = await configureConnection(await openConnection(databasePath));
+    const beforeAccountMigration = await prepared.all(
+      'SELECT id FROM schema_migrations ORDER BY id',
+    );
+    assert.equal(beforeAccountMigration.at(-1).id, '006_clear_pending_outcome_dates.js');
+    await prepared.run(
+      'UPDATE users SET firebaseUid = ?, password = NULL WHERE id = 1',
+      ['firebase-legacy-owner'],
+    );
+    await prepared.close();
+
     let database = await BongiiDatabase.open(databasePath);
     const campaign = await database.getCampaignByCode('OLDY');
     assert.equal(campaign.title, 'Legacy Campaign');
@@ -194,11 +209,13 @@ test('migrates a legacy schema once without losing campaign data', async () => {
       WHERE id = 1
     `);
     assert.deepEqual(migratedUser, {
-      firebaseUid: null,
+      firebaseUid: 'firebase-legacy-owner',
       displayName: 'Legacy Owner',
       photoUrl: null,
       legacyUsername: 'legacy',
     });
+    const userColumns = await database.connection.all('PRAGMA table_info(users)');
+    assert.equal(userColumns.some((column) => column.name === 'password'), false);
     assert.equal(campaign.createdBy, 1);
 
     await assert.rejects(
@@ -224,6 +241,7 @@ test('migrates a legacy schema once without losing campaign data', async () => {
         '004_result_snapshots.js',
         '005_firebase_identity.js',
         '006_clear_pending_outcome_dates.js',
+        '007_remove_legacy_password.js',
       ],
     );
     await database.close();
@@ -299,6 +317,7 @@ test('preserves pre-existing orphan rows while applying the lifecycle migration'
         '004_result_snapshots.js',
         '005_firebase_identity.js',
         '006_clear_pending_outcome_dates.js',
+        '007_remove_legacy_password.js',
       ],
     );
 
@@ -315,10 +334,12 @@ test('preserves pre-existing orphan rows while applying the lifecycle migration'
 
     const violations = await database.connection.all('PRAGMA foreign_key_check');
     assert.deepEqual(
-      violations.map(({ table, rowid, parent }) => ({ table, rowid, parent })),
+      violations
+        .map(({ table, rowid, parent }) => ({ table, rowid, parent }))
+        .sort((left, right) => left.table.localeCompare(right.table)),
       [
-        { table: 'playerBoards', rowid: 1, parent: 'campaigns' },
         { table: 'campaignCategories', rowid: 1, parent: 'campaigns' },
+        { table: 'playerBoards', rowid: 1, parent: 'campaigns' },
       ],
     );
     await database.close();

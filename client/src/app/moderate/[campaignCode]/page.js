@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import {
   Ban,
   Check,
@@ -101,6 +101,7 @@ const connectionLabels = {
 };
 
 export default function ModerateCampaignPage() {
+  const router = useRouter();
   const { isAuthenticated, loading: authLoading } = useRequireAuth();
   const { campaignCode } = useParams();
   const { setSelectedPreset } = useBackground();

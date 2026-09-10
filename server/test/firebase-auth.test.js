@@ -1,20 +1,14 @@
 const assert = require('node:assert/strict');
-const jwt = require('jsonwebtoken');
 const { afterEach, test } = require('node:test');
-const { createTestContext, createUserAndToken } = require('./helpers');
+const { createTestContext } = require('./helpers');
 
 const contexts = [];
-const hybridConfig = {
-  authMode: 'hybrid',
-  jwtSecret: 'firebase-hybrid-test-secret',
+const firebaseConfig = {
   firebaseProjectId: 'bongii-test',
   allowedOrigins: ['http://localhost:3001'],
 };
 
-const tokenFor = (marker) => jwt.sign({
-  iss: 'https://securetoken.google.com/bongii-test',
-  marker,
-}, 'routing-only');
+const tokenFor = (marker) => `firebase-test-token:${marker}`;
 
 const identities = {
   legacy: {
@@ -51,24 +45,40 @@ const identities = {
 };
 
 const verifyFirebaseToken = async (token) => {
-  const marker = jwt.decode(token)?.marker;
+  const marker = token.startsWith('firebase-test-token:')
+    ? token.slice('firebase-test-token:'.length)
+    : null;
   if (!identities[marker]) throw new Error('Rejected test token');
   return identities[marker];
+};
+
+const addLocalProfile = async (database, {
+  username,
+  firstName,
+  lastName,
+  email,
+  profileIcon = '1',
+}) => {
+  const result = await database.connection.run(
+    `INSERT INTO users (username, firstName, lastName, email, profileIcon)
+     VALUES (?, ?, ?, ?, ?)`,
+    [username, firstName, lastName, email, profileIcon],
+  );
+  return database.getUser(result.lastID);
 };
 
 afterEach(async () => {
   await Promise.all(contexts.splice(0).map((context) => context.cleanup()));
 });
 
-test('links a verified Firebase identity to one legacy user without changing ownership', async () => {
+test('links a verified Firebase identity to one existing profile without changing ownership', async () => {
   const context = await createTestContext({
-    config: hybridConfig,
+    config: firebaseConfig,
     firebaseTokenVerifier: verifyFirebaseToken,
   });
   contexts.push(context);
-  const legacyUser = await context.database.addUser({
+  const legacyUser = await addLocalProfile(context.database, {
     username: 'owner',
-    password: 'legacy-password',
     firstName: 'Original',
     lastName: 'Owner',
     email: 'OWNER@example.com',
@@ -93,14 +103,14 @@ test('links a verified Firebase identity to one legacy user without changing own
   const linkedUser = await context.database.getUser(legacyUser.id);
   assert.equal(linkedUser.firebaseUid, 'firebase-legacy-owner');
   assert.equal(linkedUser.legacyUsername, 'owner');
-  assert.equal(linkedUser.password, null);
+  assert.equal(Object.hasOwn(linkedUser, 'password'), false);
   const campaign = await context.database.getCampaignByCode('LINK');
   assert.equal(campaign.createdBy, legacyUser.id);
 });
 
 test('reuses one local profile for repeated Firebase sign-ins', async () => {
   const context = await createTestContext({
-    config: hybridConfig,
+    config: firebaseConfig,
     firebaseTokenVerifier: verifyFirebaseToken,
   });
   contexts.push(context);
@@ -142,16 +152,15 @@ test('reuses one local profile for repeated Firebase sign-ins', async () => {
   assert.equal(countAfterCollision.count, 1);
 });
 
-test('requires verified email and refuses ambiguous legacy links', async () => {
+test('requires verified email and refuses ambiguous profile links', async () => {
   const context = await createTestContext({
-    config: hybridConfig,
+    config: firebaseConfig,
     firebaseTokenVerifier: verifyFirebaseToken,
   });
   contexts.push(context);
   for (const username of ['duplicate-one', 'duplicate-two']) {
-    await context.database.addUser({
+    await addLocalProfile(context.database, {
       username,
-      password: 'legacy-password',
       firstName: 'Duplicate',
       lastName: 'User',
       email: 'duplicate@example.com',
@@ -176,7 +185,7 @@ test('requires verified email and refuses ambiguous legacy links', async () => {
 
 test('returns 401 for malformed, revoked, expired, and wrong-project tokens', async () => {
   const context = await createTestContext({
-    config: hybridConfig,
+    config: firebaseConfig,
     firebaseTokenVerifier: verifyFirebaseToken,
   });
   contexts.push(context);
@@ -192,18 +201,4 @@ test('returns 401 for malformed, revoked, expired, and wrong-project tokens', as
       .set('Authorization', `Bearer ${token}`);
     assert.equal(response.status, 401);
   }
-});
-
-test('hybrid mode accepts legacy sessions during the migration window', async () => {
-  const context = await createTestContext({
-    config: hybridConfig,
-    firebaseTokenVerifier: verifyFirebaseToken,
-  });
-  contexts.push(context);
-  const { token } = await createUserAndToken(context.api, '-hybrid');
-
-  const response = await context.api
-    .get('/api/users/current')
-    .set('Authorization', `Bearer ${token}`);
-  assert.equal(response.status, 200);
 });

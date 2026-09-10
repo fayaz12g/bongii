@@ -1,12 +1,10 @@
-const jwt = require('jsonwebtoken');
-
 const asyncRoute = (handler) => (req, res, next) => {
   Promise.resolve(handler(req, res, next)).catch(next);
 };
 
 const publicUser = (user) => ({
   id: user.id,
-  username: user.legacyUsername || user.username,
+  username: user.legacyUsername || user.username || user.displayName,
   displayName: user.displayName
     || [user.firstName, user.lastName].filter(Boolean).join(' ')
     || user.username,
@@ -17,17 +15,7 @@ const publicUser = (user) => ({
   photoUrl: user.photoUrl,
 });
 
-const isFirebaseToken = (token) => {
-  const decoded = jwt.decode(token);
-  return typeof decoded?.iss === 'string'
-    && decoded.iss.startsWith('https://securetoken.google.com/');
-};
-
-const createAuthMiddleware = (
-  database,
-  { authMode = 'legacy', jwtSecret },
-  verifyFirebaseToken,
-) => asyncRoute(async (req, res, next) => {
+const createAuthMiddleware = (database, verifyFirebaseToken) => asyncRoute(async (req, res, next) => {
   const authorization = req.get('Authorization');
   const bearer = authorization?.match(/^Bearer\s+(.+)$/i);
   if (!bearer) {
@@ -35,57 +23,26 @@ const createAuthMiddleware = (
     return;
   }
 
-  const token = bearer[1];
-  const useFirebase = authMode === 'firebase'
-    || (authMode === 'hybrid' && isFirebaseToken(token));
-
-  if (useFirebase) {
-    let decoded;
-    try {
-      decoded = await verifyFirebaseToken(token);
-    } catch {
-      res.status(401).json({ error: 'Invalid, expired, or revoked token' });
-      return;
-    }
-
-    if (!decoded.uid || !decoded.email || decoded.email_verified !== true) {
-      res.status(403).json({ error: 'A verified email address is required' });
-      return;
-    }
-
-    req.user = await database.syncFirebaseUser({
-      firebaseUid: decoded.uid,
-      displayName: decoded.name,
-      email: decoded.email,
-      emailVerified: decoded.email_verified,
-      photoUrl: decoded.picture,
-    });
-    next();
-    return;
-  }
-
-  if (authMode === 'firebase') {
-    res.status(401).json({ error: 'Invalid or expired token' });
-    return;
-  }
-
   let decoded;
   try {
-    decoded = jwt.verify(token, jwtSecret);
+    decoded = await verifyFirebaseToken(bearer[1]);
   } catch {
-    res.status(401).json({ error: 'Invalid or expired token' });
+    res.status(401).json({ error: 'Invalid, expired, or revoked token' });
     return;
   }
 
-  const user = decoded.sub
-    ? await database.getUser(Number(decoded.sub))
-    : await database.getUserByUsername(decoded.username);
-  if (!user) {
-    res.status(401).json({ error: 'Account no longer exists' });
+  if (!decoded.uid || !decoded.email || decoded.email_verified !== true) {
+    res.status(403).json({ error: 'A verified email address is required' });
     return;
   }
 
-  req.user = user;
+  req.user = await database.syncFirebaseUser({
+    firebaseUid: decoded.uid,
+    displayName: decoded.name,
+    email: decoded.email,
+    emailVerified: decoded.email_verified,
+    photoUrl: decoded.picture,
+  });
   next();
 });
 

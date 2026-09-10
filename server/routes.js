@@ -1,80 +1,29 @@
-const { createHash, timingSafeEqual } = require('node:crypto');
-const bcrypt = require('bcryptjs');
 const express = require('express');
-const { rateLimit } = require('express-rate-limit');
-const jwt = require('jsonwebtoken');
 const { asyncRoute, createAuthMiddleware, publicUser } = require('./auth');
 const { CampaignLifecycle, withAllowedActions } = require('./campaignLifecycle');
 const { schemas, validateBody } = require('./validation');
 
-const matchesLegacyPassword = (candidate, storedPassword) => {
-  const candidateDigest = createHash('sha256').update(candidate).digest();
-  const storedDigest = createHash('sha256').update(storedPassword).digest();
-  return timingSafeEqual(candidateDigest, storedDigest);
-};
-
-const createRouter = ({ database, config, campaignEvents, firebaseTokenVerifier }) => {
+const createRouter = ({ database, config, campaignEvents, firebaseTokenVerifier, metrics }) => {
   const router = express.Router();
-  const requireAuth = createAuthMiddleware(database, config, firebaseTokenVerifier);
+  const requireAuth = createAuthMiddleware(database, firebaseTokenVerifier);
   const lifecycle = new CampaignLifecycle(database);
-  const authLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000,
-    limit: 100,
-    standardHeaders: 'draft-8',
-    legacyHeaders: false,
-  });
 
   router.get('/health', (req, res) => {
     res.json({ status: 'ok' });
   });
 
-  router.post('/users', authLimiter, validateBody(schemas.register), asyncRoute(async (req, res) => {
-    if (config.authMode === 'firebase') {
-      res.status(404).json({ error: 'Not found' });
-      return;
+  router.get('/ready', async (req, res) => {
+    try {
+      await database.checkReadiness();
+      res.json({ status: 'ready' });
+    } catch {
+      res.status(503).json({ status: 'unavailable' });
     }
-    const existingUser = await database.getUserByUsername(req.validatedBody.username);
-    if (existingUser) {
-      res.status(409).json({ error: 'Username already exists' });
-      return;
-    }
+  });
 
-    const password = await bcrypt.hash(req.validatedBody.password, 12);
-    const user = await database.addUser({ ...req.validatedBody, password });
-    res.status(201).json(publicUser(user));
-  }));
-
-  router.post('/login', authLimiter, validateBody(schemas.login), asyncRoute(async (req, res) => {
-    if (config.authMode === 'firebase') {
-      res.status(404).json({ error: 'Not found' });
-      return;
-    }
-    const user = await database.getUserByUsername(req.validatedBody.username);
-    if (!user?.password) {
-      res.status(401).json({ error: 'Invalid login information' });
-      return;
-    }
-
-    const isHashed = user.password.startsWith('$2');
-    const passwordMatches = isHashed
-      ? await bcrypt.compare(req.validatedBody.password, user.password)
-      : matchesLegacyPassword(req.validatedBody.password, user.password);
-    if (!passwordMatches) {
-      res.status(401).json({ error: 'Invalid login information' });
-      return;
-    }
-
-    if (!isHashed) {
-      const upgradedPassword = await bcrypt.hash(req.validatedBody.password, 12);
-      await database.updateUserPassword(user.id, upgradedPassword);
-    }
-
-    const token = jwt.sign(
-      { sub: String(user.id), username: user.username },
-      config.jwtSecret,
-      { expiresIn: '1h' },
-    );
-    res.json({ token });
+  router.get('/metrics', asyncRoute(async (req, res) => {
+    const migrationVersion = await database.getMigrationVersion();
+    res.type('text/plain').send(metrics.render(migrationVersion));
   }));
 
   router.get('/users', requireAuth, asyncRoute(async (req, res) => {
@@ -193,9 +142,15 @@ const createRouter = ({ database, config, campaignEvents, firebaseTokenVerifier 
   router.post('/campaigns/:code/cancel', requireAuth, transitionCampaign('cancel'));
 
   router.post('/campaigns/:code/finalize', requireAuth, asyncRoute(async (req, res) => {
-    const result = await lifecycle.finalize(req.params.code, req.user.id);
-    if (!result.alreadyFinalized) campaignEvents?.emit('campaign.finalized', result);
-    res.json({ success: true, ...result });
+    const startedAt = process.hrtime.bigint();
+    try {
+      const result = await lifecycle.finalize(req.params.code, req.user.id);
+      if (!result.alreadyFinalized) campaignEvents?.emit('campaign.finalized', result);
+      res.json({ success: true, ...result });
+    } finally {
+      const elapsedNanoseconds = process.hrtime.bigint() - startedAt;
+      metrics.recordFinalization(Number(elapsedNanoseconds) / 1_000_000_000);
+    }
   }));
 
   router.post('/campaigns/:code/items/:itemId/outcome', requireAuth, validateBody(schemas.itemOutcome), asyncRoute(async (req, res) => {

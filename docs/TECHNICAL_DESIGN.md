@@ -151,7 +151,7 @@ photoUrl TEXT,
 legacyUsername TEXT
 ```
 
-The Firebase UID becomes the external identity key. Email is profile data and must not be used as a foreign key because it can change. Remove the password column only after migration is verified and backed up.
+The Firebase UID is the external identity key. Email is profile data and must not be used as a foreign key because it can change. Migration `007_remove_legacy_password.js` removes local password storage only after verifying that every account is Firebase-linked and password-free.
 
 ## Lifecycle service
 
@@ -296,14 +296,9 @@ Use Firebase Authentication for identity only:
 
 For profile pictures, first use the Google provider's `photoURL` or existing preset avatars. Direct uploads add billing, security rules, content validation, resizing, deletion, and abuse concerns; schedule them separately.
 
-### Migration options
+### Migration outcome
 
-Choose after auditing current account count and email quality:
-
-- Small user base: create Firebase accounts through a controlled reset flow and manually recover accounts without email.
-- Larger user base: provide a one-time legacy login that verifies the old credential, requires a unique email, creates and links the Firebase account, then clears the local password.
-
-Do not silently create Firebase accounts from all stored plaintext passwords. Minimize the period in which the legacy password route remains available and log migration status without logging credentials.
+The production account migration completed on 2026-09-10. Express now verifies Firebase ID tokens only, legacy registration and login routes are removed, and SQLite stores no password column. Local integer user IDs remain stable so campaign ownership does not change.
 
 ## Security baseline
 
@@ -315,7 +310,7 @@ Complete these alongside Phase 0 and Firebase work:
 - Never include password, Firebase UID, email, or auth token in public campaign, board, result, or socket payloads.
 - Redact authorization headers and user records from logs.
 - Keep Firebase service credentials in Fly.io secrets, never in client variables or the repository.
-- Rotate the existing JWT secret after legacy authentication is removed.
+- Rotate Firebase service-account credentials after suspected exposure and according to the project's credential policy.
 - Decide whether board codes alone grant public read access; if so, retain enough entropy and rate-limit enumeration attempts.
 
 ## Test strategy
@@ -363,6 +358,6 @@ Use Playwright with separate browser contexts for one moderator and at least two
 5. Release lifecycle and outcome writes to the moderator UI.
 6. Release socket listeners with HTTP snapshot fallback.
 7. Enable finalization and results after scoring fixtures pass against staged campaign data.
-8. Deploy Firebase authentication behind a migration flag, then remove legacy login after adoption is verified.
+8. Verify Firebase authentication and migration `007`, then reject any rollback image that expects legacy passwords.
 
 Rollback must never reverse a migration by deleting columns or result rows. Roll application code back to a version that can read the migrated schema, then restore from backup only for confirmed data corruption.

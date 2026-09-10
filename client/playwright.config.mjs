@@ -2,7 +2,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./test",
-  testMatch: ["**/*.a11y.spec.mjs", "**/*.auth.spec.mjs"],
+  testMatch: ["**/*.a11y.spec.mjs", "**/*.auth.spec.mjs", "**/*.journey.spec.mjs"],
   fullyParallel: false,
   workers: 1,
   forbidOnly: Boolean(process.env.CI),
@@ -20,11 +20,16 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
     },
     {
+      command: "npm --prefix ../server run start:playwright",
+      url: "http://127.0.0.1:43900/api/health",
+      reuseExistingServer: !process.env.CI,
+    },
+    {
       command: "npm run dev -- --port 43901",
       env: {
         ...process.env,
         NEXT_DIST_DIR: ".next-playwright",
-        NEXT_PUBLIC_API_BASE_URL: "http://localhost:43901",
+        NEXT_PUBLIC_API_BASE_URL: "http://127.0.0.1:43900",
         NEXT_PUBLIC_FIREBASE_API_KEY: "fake-api-key",
         NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: "demo-bongii.firebaseapp.com",
         NEXT_PUBLIC_FIREBASE_PROJECT_ID: "demo-bongii",

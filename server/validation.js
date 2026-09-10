@@ -22,18 +22,6 @@ const requiredText = (maximum) => z.string().trim().min(1).max(maximum);
 const optionalEmail = z.union([z.string().trim().email(), z.literal('')]).optional();
 
 const schemas = {
-  register: z.object({
-    username: requiredText(50),
-    password: z.string().min(8).max(200),
-    firstName: requiredText(80),
-    lastName: requiredText(80),
-    email: optionalEmail,
-    profileIcon: z.string().trim().max(100).optional(),
-  }),
-  login: z.object({
-    username: requiredText(50),
-    password: z.string().min(1).max(200),
-  }),
   profile: z.union([
     z.object({
       displayName: requiredText(160),

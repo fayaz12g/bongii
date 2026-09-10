@@ -8,11 +8,16 @@ const request = require('supertest');
 const { io: createSocket } = require('socket.io-client');
 const { createApiServer } = require('../app');
 const { BongiiDatabase } = require('../db');
-const { boardPayloadFor, campaignPayload, createUserAndToken } = require('./helpers');
+const {
+  boardPayloadFor,
+  campaignPayload,
+  createUserAndToken,
+  verifyTestFirebaseToken,
+} = require('./helpers');
 
 const contexts = [];
 const testConfig = {
-  jwtSecret: 'phase-two-socket-test-secret',
+  firebaseProjectId: 'bongii-test',
   allowedOrigins: [
     'http://localhost:3001',
     'https://bongii-preview-example.vercel.app',
@@ -31,7 +36,12 @@ const createSocketContext = async () => {
       telemetry.push({ level: 'info', message, ...details });
     },
   };
-  const runtime = createApiServer({ database, config: testConfig, logger });
+  const runtime = createApiServer({
+    database,
+    config: testConfig,
+    firebaseTokenVerifier: verifyTestFirebaseToken,
+    logger,
+  });
   runtime.server.listen(0, '127.0.0.1');
   await once(runtime.server, 'listening');
   const address = runtime.server.address();
@@ -237,6 +247,14 @@ test('returns the authoritative version and snapshot after a viewer reconnects',
     snapshot.body.tiles.find((tile) => tile.categoryItemId === itemId).outcome.status,
     'happened',
   );
+
+  viewer.auth = { reconnecting: true };
+  viewer.disconnect();
+  await connect(viewer);
+  const metrics = await context.api.get('/api/metrics');
+  assert.match(metrics.text, /bongii_socket_connections_total 3/);
+  assert.match(metrics.text, /bongii_socket_reconnects_total 1/);
+  assert.match(metrics.text, /bongii_socket_connections_active 1/);
 });
 
 test('allows only configured exact browser origins', async () => {

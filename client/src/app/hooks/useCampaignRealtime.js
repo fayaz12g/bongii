@@ -154,7 +154,10 @@ export const useCampaignRealtime = ({
 
     socket.on("connect", handleConnect);
     socket.on("disconnect", () => {
-      if (active) setConnectionState("reconnecting");
+      if (active) {
+        socket.auth = { ...socket.auth, reconnecting: true };
+        setConnectionState("reconnecting");
+      }
     });
     socket.on("connect_error", () => {
       if (active) setConnectionState("error");

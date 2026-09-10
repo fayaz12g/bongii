@@ -2,7 +2,6 @@ const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const {
   isExactHttpOrigin,
-  parseAuthMode,
   parseOrigins,
   parsePrivateKey,
 } = require('../config');
@@ -20,7 +19,5 @@ test('parses and validates exact browser origins', () => {
 });
 
 test('normalizes authentication configuration values', () => {
-  assert.equal(parseAuthMode(undefined), 'legacy');
-  assert.equal(parseAuthMode(' HYBRID '), 'hybrid');
   assert.equal(parsePrivateKey('first\\nsecond'), 'first\nsecond');
 });

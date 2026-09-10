@@ -22,6 +22,8 @@ flowchart LR
     P0 --> P5[Phase 5: Firebase Auth]
     P4 --> P6[Phase 6: Release quality]
     P5 --> P6
+    P6 --> P7[Phase 7: Issue closure and product polish]
+    P7 --> P8[Phase 8: Paid campaign creation]
 ```
 
 ## Phase 0: Stabilize the foundation
@@ -30,7 +32,7 @@ Priority: `P0`
 
 Goal: make current behavior safe to extend and establish a fast regression check.
 
-Status: completed locally on 2026-09-08. The first GitHub-hosted CI run and production migration remain deployment checks.
+Status: completed and deployed as of 2026-09-10. The ordered migrations have been applied to the upgraded databases without losing account or campaign data.
 
 ### API and data cleanup
 
@@ -75,7 +77,7 @@ Priority: `P1`
 
 Goal: represent open entries, waiting for results, active moderation, and completed history as real server states.
 
-Status: completed locally on 2026-09-08. Production backup, migration `002_campaign_lifecycle.js`, deployment, and hosted CI remain release checks.
+Status: completed and deployed as of 2026-09-10. Migration `002_campaign_lifecycle.js` has been applied to the upgraded databases.
 
 ### Domain and database
 
@@ -108,7 +110,7 @@ Priority: `P1`
 
 Goal: one moderator decision updates every relevant board without player marking.
 
-Status: completed locally on 2026-09-09. Production backup, migration `003_item_outcomes.js`, deployment, and hosted CI remain release checks.
+Status: completed and deployed as of 2026-09-10. Migration `003_item_outcomes.js` has been applied to the upgraded databases.
 
 ### Outcome model and API
 
@@ -152,7 +154,7 @@ Priority: `P1`
 
 Goal: finish a campaign atomically and publish deterministic results.
 
-Status: completed locally on 2026-09-09. Production backup, migration `004_result_snapshots.js`, deployment, and hosted CI remain release checks.
+Status: completed and deployed as of 2026-09-10. Migration `004_result_snapshots.js` has been applied to the upgraded databases.
 
 ### Scoring engine
 
@@ -232,28 +234,28 @@ Priority: `P1` for password security, `P2` for uploaded avatars
 
 Goal: remove password ownership from Bongii while retaining SQLite for game and profile data.
 
-Status: implemented and tested locally on 2026-09-09. Firebase project provisioning, production account remediation, and the backup-first rollout remain operational work.
+Status: completed and deployed as of 2026-09-10. Firebase Authentication is active, the databases have been upgraded, and all existing accounts have been migrated without changing campaign ownership.
 
 ### Authentication
 
-- [ ] Create separate Firebase projects for development and production.
-- [ ] Enable email/password and Google providers; do not enable phone authentication.
+- [x] Create separate Firebase projects for development and production.
+- [x] Enable email/password and Google providers; do not enable phone authentication.
 - [x] Add Firebase client initialization and an application-wide auth provider.
 - [x] Add email registration, sign-in, sign-out, verification, and forgot-password screens.
 - [x] Send Firebase ID tokens to Express and verify them with the Admin SDK.
 - [x] Key local user records by unique `firebaseUid`, not username.
 - [x] Replace scattered local-storage token reads with one authenticated API client.
 - [x] Preserve the return URL across sign-in.
-- [ ] Rate-limit sensitive endpoints and configure authorized domains.
+- [x] Configure authorized domains for the deployed environments.
 
 ### Existing-account migration
 
 - [x] Audit current users for missing or duplicate email addresses before choosing a migration path.
-- [ ] Back up the database and notify affected users.
-- [ ] Link migratable accounts without changing campaign ownership.
-- [ ] Provide manual recovery for users without a usable email address.
+- [x] Complete the backup-first account migration rollout.
+- [x] Link migratable accounts without changing campaign ownership.
+- [x] Recover accounts without a usable email address.
 - [x] Clear legacy password values immediately after successful migration.
-- [ ] Remove password login and the password column after a measured migration window.
+- [x] Disable legacy password login after all accounts are migrated.
 
 ### Profiles and avatars
 
@@ -264,25 +266,130 @@ Status: implemented and tested locally on 2026-09-09. Firebase project provision
 
 ### Acceptance checks
 
-- [ ] Email and Google users can reach the same local profile after repeated sign-ins.
-- [ ] Password reset and email verification work on the production domain.
-- [ ] Revoked, expired, malformed, and wrong-project tokens return `401`.
+- [x] Email and Google users can reach the same local profile after repeated sign-ins.
+- [x] Password reset and email verification work on the production domain.
+- [x] Revoked, expired, malformed, and wrong-project tokens return `401`.
 - [x] Migrated moderators still own their campaigns.
-- [ ] No local password value remains after migration completes.
+- [x] No local password value remains after migration completes.
 
 ## Phase 6: Release quality and operations
 
 Priority: `P1`
 
-- [ ] Add Playwright journeys for create board, lock, moderate from one browser, observe from two others, finalize, and view results.
-- [ ] Run Socket.IO reconnect and duplicate-event tests.
-- [ ] Add structured request IDs and redacted server logs.
-- [ ] Add health and readiness endpoints that do not expose configuration.
-- [ ] Track API error rate, socket connections, reconnects, finalization duration, and migration version.
+Status: partially implemented as of 2026-09-10. The remaining scope and schedule are TBD.
+
+- [x] Delegate sensitive sign-in and registration rate limiting to Firebase and remove legacy authentication endpoints.
+- [x] Remove the unused local password column with a guarded migration after account migration.
+- [x] Add Playwright journeys for create board, lock, moderate from one browser, observe from two others, finalize, and view results.
+- [x] Run Socket.IO reconnect and duplicate-event tests.
+- [x] Add structured request IDs and redacted server logs.
+- [x] Add health and readiness endpoints that do not expose configuration.
+- [x] Track API error rate, socket connections, reconnects, finalization duration, and migration version.
 - [ ] Exercise database restore from a Fly.io volume backup.
-- [ ] Add dependency and secret scanning in CI.
-- [ ] Document local setup, environment variables, API contracts, deployment, rollback, moderation, and scoring.
+- [x] Add dependency and secret scanning in CI.
+- [x] Document local setup, environment variables, API contracts, deployment, rollback, moderation, and scoring.
 - [ ] Run a small closed beta with moderators and players on phones before public launch.
+
+## Phase 7: Issue closure and product polish
+
+Priority: `P0` for board correctness and duplicate-action prevention, `P1` for player experience
+
+Goal: resolve the ten non-payment issues in the GitHub issue tracker snapshot from 2026-09-10 while preserving anonymous play, authoritative server state, accessible motion controls, and existing campaign ownership.
+
+Status: planned. The source snapshot contains 11 open issues and no closed issues. Payment work is separated into Phase 8.
+
+### Product decisions and delivery order
+
+1. Fix 4 by 4 board correctness before changing board ownership or live scoring.
+2. Preserve anonymous board creation. Signed-in players get profile defaults and account ownership; anonymous players get an unguessable edit token. Add abuse controls instead of making sign-in mandatory.
+3. Permit board edits only while the campaign is `open`. Locking entries makes every board read-only.
+4. Treat a Bong as one newly completed line. Show Double Bong when one authoritative update completes two or more new lines; reconnecting must not replay old celebrations.
+5. Keep campaign themes authoritative on campaign, board, moderation, and result routes. Personal appearance controls may affect only generic application routes.
+6. Use Google profile photos or local preset avatars first. Enable direct uploads through Firebase Storage only after Blaze billing, a budget alert, storage rules, validation, and deletion behavior are configured.
+
+### Board correctness, identity, and editing
+
+- [ ] [#7](https://github.com/fayaz12g/bongii/issues/7) Define the free tile only for odd board sizes. Generate and validate all 16 positions of a 4 by 4 board as playable category tiles.
+- [ ] Audit existing 4 by 4 boards before rollout. Preserve historical finalized snapshots and bump `rulesVersion` if new scoring semantics differ from stored results.
+- [ ] Add API, scoring-fixture, and browser coverage for creating, opening, moderating, finalizing, and ranking a 4 by 4 board.
+- [ ] [#2](https://github.com/fayaz12g/bongii/issues/2) Add nullable board ownership and hashed anonymous edit-token fields with an ordered migration; never return token hashes or store raw tokens.
+- [ ] Autofill the editable player-name field from the signed-in profile while retaining manual entry for anonymous players.
+- [ ] Add an authenticated-or-edit-token board update endpoint. Validate ownership, campaign membership, tile uniqueness, and the `open` lifecycle state in one transaction.
+- [ ] Add per-IP and per-campaign board-creation limits without weakening Firebase authentication limits or blocking normal shared-network events.
+- [ ] Show an Edit board action only to the signed-in owner or a browser holding the anonymous edit token. Lost anonymous tokens cannot be recovered.
+- [ ] [#9](https://github.com/fayaz12g/bongii/issues/9) Replace placeholder avatars with refreshed local presets and use the Google `photoURL` when available.
+- [ ] Display the resolved player avatar in board headers and previews, and in the free tile on odd-sized boards. Provide an accessible local fallback when an image fails.
+- [ ] Add Firebase Storage avatar upload, replace, and delete flows. Restrict files by owner path, MIME type, byte size, and supported image dimensions; remove superseded objects and account-owned files on deletion.
+- [ ] Document Storage billing, budget alerts, security rules, content handling, and rollback before enabling uploads in production.
+
+### Live Bong feedback
+
+- [ ] [#6](https://github.com/fayaz12g/bongii/issues/6) Reuse the server scoring engine to include the current completed-line count in authoritative board snapshots before finalization.
+- [ ] Show the current Bong count without relying on color and update it from versioned snapshots.
+- [ ] Compare consecutive campaign versions to announce Bong or Double Bong only for newly completed lines. Never celebrate on initial load, stale events, or reconnect recovery.
+- [ ] Add focused line highlighting and a bounded overlay that does not cover controls. Replace movement with a static announcement when reduced motion is active and use a polite live region for assistive technology.
+- [ ] Test single-line, multi-line, reverted-outcome, stale-event, reduced-motion, and reconnect cases on 3 by 3, 4 by 4, and 5 by 5 boards.
+
+### Server wake and duplicate-action handling
+
+- [ ] [#8](https://github.com/fayaz12g/bongii/issues/8) Add one application-level readiness coordinator that starts a `/api/ready` request on initial load and shares the in-flight result across API consumers.
+- [ ] Show a blocking "Waking Bongii" status only after a short delay, retain the user's pending navigation or action, and continue automatically when readiness succeeds.
+- [ ] Disable the initiating control and deduplicate mutations while an action is pending so repeated clicks cannot create duplicate campaigns or boards.
+- [ ] Use bounded retry and timeout behavior, then replace the wake status with an actionable retry error rather than an indefinite overlay.
+- [ ] Start realtime connections after readiness and keep existing snapshot recovery for later disconnects.
+- [ ] Add a Playwright cold-start simulation proving one click reaches Browse and Sign in, one submit produces one mutation, focus is managed, and timeout recovery works.
+
+### Route-scoped appearance and mobile controls
+
+- [ ] [#4](https://github.com/fayaz12g/bongii/issues/4) Replace the mutable global campaign preset with a route-scoped theme resolver. Generic Browse, Boards, Leaderboards, authentication, and profile routes must reset to the application theme.
+- [ ] [#5](https://github.com/fayaz12g/bongii/issues/5) Remove personal background switching from campaign-scoped player and moderator screens; those routes always restore the campaign's saved colors on load and navigation.
+- [ ] [#11](https://github.com/fayaz12g/bongii/issues/11) Restore recognizable color to generic routes with restrained static gradients or bands while retaining WCAG 2.2 AA contrast.
+- [ ] Keep particles and snow-like effects off work screens, cap decorative density on the home screen, and render no particles when reduced motion is active.
+- [ ] [#12](https://github.com/fayaz12g/bongii/issues/12) Keep one correctly styled Reduce motion switch inside the openable navigation/settings menu and remove duplicate footer controls.
+- [ ] [#3](https://github.com/fayaz12g/bongii/issues/3) Make the mobile footer/navigation available at the viewport bottom without scrolling. Account for safe-area insets and reserve content space so it never covers board tiles, forms, dialogs, or toasts.
+- [ ] Add 320-pixel-through-desktop visual, keyboard, and accessibility checks for route transitions, menu state, sticky controls, campaign color restoration, and reduced motion.
+
+### Phase 7 acceptance checks
+
+- [ ] A 4 by 4 campaign completes end to end with no center tile and deterministic results.
+- [ ] Signed-in board creation starts with the profile name and avatar; anonymous creation remains possible and both ownership paths can edit only while the campaign is open.
+- [ ] Bong counts match server scoring, Double Bong appears only for a multi-line update, and reconnects do not replay celebrations.
+- [ ] A simulated 15-second API cold start completes the user's original action after one click and cannot duplicate a mutation.
+- [ ] Leaving any campaign-scoped route restores the application theme; campaign routes cannot be stranded on a personal background.
+- [ ] Color remains visible but restrained, reduced motion removes decorative movement, and the sole motion switch works from the openable menu.
+- [ ] The mobile footer remains reachable without scrolling and never obscures interactive content or the current board.
+- [ ] Google, uploaded, preset, and failed-image avatar paths render a usable accessible fallback and unauthorized users cannot replace or delete another user's upload.
+- [ ] Every non-payment issue in the 2026-09-10 tracker snapshot has a regression test and can be closed with evidence linked from its issue.
+
+## Phase 8: Paid campaign creation
+
+Priority: `P1`
+
+Goal: make campaign creation a paid entitlement without charging players, weakening server authorization, or disrupting management of existing campaigns.
+
+Status: planned for [#10](https://github.com/fayaz12g/bongii/issues/10). Stripe account configuration, product approval, legal policy, and production price IDs are rollout prerequisites.
+
+### Billing authority and data
+
+- [ ] Use Stripe Checkout and Billing Portal for the `$1.99/month` and `$19.99 lifetime` campaign-creation plans. Stripe webhooks, not client redirects, grant entitlements.
+- [ ] Create Stripe products and server-configured prices; never accept a price or entitlement claim from the client.
+- [ ] Add ordered billing and processed-webhook migrations keyed to the local user and Firebase UID. Keep provider customer IDs, subscription state, period end, lifetime purchase state, and unique event IDs.
+- [ ] Introduce a replaceable billing gateway plus authenticated Checkout, Billing Portal, and entitlement-status endpoints.
+- [ ] Verify Stripe signatures against the raw webhook body, process events idempotently, tolerate out-of-order delivery, and revoke only recurring entitlements when a subscription actually ends.
+- [ ] Enforce campaign-creation entitlement in the server transaction. Existing campaigns remain viewable and manageable after a recurring plan lapses.
+
+### Checkout and operations
+
+- [ ] Replace the Create flow for unentitled users with a concise plan choice and Checkout handoff; restore the original return URL after purchase or cancellation.
+- [ ] Cover active, past-due, cancelled, expired, lifetime, duplicate-event, forged-webhook, and Stripe-outage cases with gateway fakes and webhook fixtures.
+- [ ] Complete a Stripe test-mode purchase, renewal, cancellation, portal, and lifetime-purchase smoke test before enabling production price IDs.
+- [ ] Document secrets, webhook rotation, refunds, support, tax/privacy considerations, metrics, reconciliation, and a kill switch that disables new checkout without granting free entitlements.
+
+### Phase 8 acceptance checks
+
+- [ ] Users with either paid plan can create campaigns, users without an entitlement cannot bypass the server gate, and webhook replay cannot alter entitlement twice.
+- [ ] Players can create and view boards without payment, and moderators retain access to campaigns created before an entitlement lapses.
+- [ ] Issue [#10](https://github.com/fayaz12g/bongii/issues/10) has automated regression evidence plus a completed Stripe test-mode release check.
 
 ## Suggested follow-up backlog
 
@@ -303,14 +410,13 @@ These are worthwhile after the core loop is reliable.
 | `P2` | Report and rate limits | Reduces spam in public campaign discovery |
 | `P2` | Privacy controls | Supports unlisted campaigns, public/private boards, and display-name consent |
 
-## Completed Phase 0 slice
+## Current delivery status
 
-The initial implementation slice is complete:
+As of 2026-09-10:
 
-1. Database and API URLs are environment-driven.
-2. API tests use a temporary database and app factory.
-3. The cleanup endpoint is removed.
-4. Campaign, board, authorization, credentials, and migration regressions are covered.
-5. CI runs server tests, client lint/build, and production dependency audits.
-
-This provides the base for the Phase 1 lifecycle migration without changing game rules at the same time.
+1. Phases 0 through 5 are implemented.
+2. Ordered schema migrations have been applied to all active databases.
+3. Firebase Authentication is active and all existing accounts have been migrated while retaining campaign ownership.
+4. Phase 6 is partially implemented; its remaining scope and schedule are TBD.
+5. Phase 7 is planned for the ten non-payment issues in the current GitHub tracker.
+6. Phase 8 is planned for paid campaign creation in issue `#10`.

@@ -6,20 +6,36 @@ const { createApp } = require('../app');
 const { BongiiDatabase } = require('../db');
 
 const testConfig = {
-  authMode: 'legacy',
-  jwtSecret: 'phase-zero-test-secret',
+  firebaseProjectId: 'bongii-test',
   allowedOrigins: ['http://localhost:3001'],
+};
+const testLogger = {
+  error() {},
+  info() {},
+};
+const verifyTestFirebaseToken = async (token) => {
+  const prefix = 'test-firebase-token:';
+  if (!token.startsWith(prefix)) throw new Error('Rejected test token');
+  const username = token.slice(prefix.length);
+  if (!username) throw new Error('Rejected test token');
+  return {
+    uid: `firebase-${username}`,
+    email: `${username}@example.com`,
+    email_verified: true,
+    name: 'Test Moderator',
+  };
 };
 
 const createTestContext = async ({
   config = testConfig,
-  firebaseTokenVerifier,
+  firebaseTokenVerifier = verifyTestFirebaseToken,
+  logger = testLogger,
 } = {}) => {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'bongii-test-'));
   const databasePath = path.join(directory, 'test.db');
   const database = await BongiiDatabase.open(databasePath);
   const context = {
-    api: request(createApp({ database, config, firebaseTokenVerifier })),
+    api: request(createApp({ database, config, firebaseTokenVerifier, logger })),
     database,
     databasePath,
     async restart() {
@@ -29,6 +45,7 @@ const createTestContext = async ({
         database: context.database,
         config,
         firebaseTokenVerifier,
+        logger,
       }));
     },
     async cleanup() {
@@ -41,18 +58,12 @@ const createTestContext = async ({
 
 const createUserAndToken = async (api, suffix = '') => {
   const username = `moderator${suffix}`;
-  const password = 'secure-password';
-  const registration = await api.post('/api/users').send({
-    username,
-    password,
-    firstName: 'Test',
-    lastName: 'Moderator',
-    email: `${username}@example.com`,
-    profileIcon: '1',
-  });
-  const login = await api.post('/api/login').send({ username, password });
+  const token = `test-firebase-token:${username}`;
+  const profile = await api
+    .get('/api/users/current')
+    .set('Authorization', `Bearer ${token}`);
 
-  return { login, registration, token: login.body.token, username };
+  return { login: profile, registration: profile, token, username };
 };
 
 const campaignPayload = () => ({
@@ -90,4 +101,5 @@ module.exports = {
   campaignPayload,
   createTestContext,
   createUserAndToken,
+  verifyTestFirebaseToken,
 };

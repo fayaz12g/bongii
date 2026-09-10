@@ -69,6 +69,19 @@ test("does not let a stale event overwrite a newer board snapshot", () => {
   assert.strictEqual(result.snapshot, current);
 });
 
+test("ignores a duplicate outcome without changing or reanimating its tile", () => {
+  const current = snapshot();
+  const result = applyBoardOutcome(current, {
+    campaignVersion: 7,
+    itemId: 11,
+    status: "happened",
+    decidedAt: "2026-09-09T12:00:00.000Z",
+  });
+
+  assert.equal(result.itemChanged, false);
+  assert.strictEqual(result.snapshot, current);
+});
+
 test("refreshes after every reconnect and after an initial version mismatch", () => {
   assert.equal(shouldRefreshAfterJoin({
     hasJoined: false,

@@ -59,12 +59,28 @@ class BongiiDatabase {
 
   static async open(databasePath) {
     const connection = await configureConnection(await openConnection(databasePath));
-    await migrate(connection);
-    return new BongiiDatabase(databasePath, connection);
+    try {
+      await migrate(connection);
+      return new BongiiDatabase(databasePath, connection);
+    } catch (error) {
+      await connection.close();
+      throw error;
+    }
   }
 
   async close() {
     await this.connection.close();
+  }
+
+  async checkReadiness() {
+    await this.connection.get('SELECT 1');
+  }
+
+  async getMigrationVersion() {
+    const migration = await this.connection.get(
+      'SELECT id FROM schema_migrations ORDER BY id DESC LIMIT 1',
+    );
+    return migration?.id || 'none';
   }
 
   async transaction(work) {
@@ -82,21 +98,8 @@ class BongiiDatabase {
     }
   }
 
-  async addUser(user) {
-    const result = await this.connection.run(
-      `INSERT INTO users (username, password, firstName, lastName, email, profileIcon)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [user.username, user.password, user.firstName, user.lastName, user.email || null, user.profileIcon || '1'],
-    );
-    return this.getUser(result.lastID);
-  }
-
   getUser(id) {
     return this.connection.get('SELECT * FROM users WHERE id = ?', [id]);
-  }
-
-  getUserByUsername(username) {
-    return this.connection.get('SELECT * FROM users WHERE username = ?', [username]);
   }
 
   getUserByFirebaseUid(firebaseUid) {
@@ -155,7 +158,7 @@ class BongiiDatabase {
         await connection.run(
           `UPDATE users
            SET firebaseUid = ?, displayName = ?, email = ?, photoUrl = ?,
-               legacyUsername = COALESCE(legacyUsername, username), password = NULL
+               legacyUsername = COALESCE(legacyUsername, username)
            WHERE id = ?`,
           [firebaseUid, displayName, email, photoUrl, user.id],
         );
@@ -203,10 +206,6 @@ class BongiiDatabase {
       [updates.firstName, updates.lastName, updates.email || null, updates.profileIcon || '1', id],
     );
     return this.getUser(id);
-  }
-
-  updateUserPassword(id, password) {
-    return this.connection.run('UPDATE users SET password = ? WHERE id = ?', [password, id]);
   }
 
   getBackgroundPreset(id, connection = this.connection) {

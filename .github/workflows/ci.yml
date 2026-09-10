@@ -9,11 +9,23 @@ permissions:
   contents: read
 
 jobs:
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_COMMENTS: false
+
   server:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -22,7 +34,8 @@ jobs:
         working-directory: server
       - run: npm test
         working-directory: server
-      - run: npm audit --omit=dev --audit-level=high
+      - name: Scan server production dependencies
+        run: npm audit --omit=dev --audit-level=high
         working-directory: server
       - name: Build server container
         run: docker build --tag bongii-server-ci ./server
@@ -38,8 +51,8 @@ jobs:
       NEXT_PUBLIC_FIREBASE_PROJECT_ID: demo-bongii
       NEXT_PUBLIC_FIREBASE_APP_ID: 1:123:web:test
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           cache: npm
@@ -56,5 +69,6 @@ jobs:
         working-directory: client
       - run: npm run build
         working-directory: client
-      - run: npm audit --omit=dev --audit-level=high
+      - name: Scan client production dependencies
+        run: npm audit --omit=dev --audit-level=high
         working-directory: client

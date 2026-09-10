@@ -13,12 +13,90 @@ afterEach(async () => {
   await Promise.all(contexts.splice(0).map((context) => context.cleanup()));
 });
 
+test('reports process health and database readiness without exposing details', async () => {
+  const context = await createTestContext();
+  contexts.push(context);
+
+  const health = await context.api.get('/api/health');
+  assert.equal(health.status, 200);
+  assert.deepEqual(health.body, { status: 'ok' });
+
+  const ready = await context.api.get('/api/ready');
+  assert.equal(ready.status, 200);
+  assert.deepEqual(ready.body, { status: 'ready' });
+
+  context.database.checkReadiness = async () => {
+    throw new Error(`Database unavailable at ${context.database.databasePath}`);
+  };
+
+  const unavailable = await context.api.get('/api/ready');
+  assert.equal(unavailable.status, 503);
+  assert.deepEqual(unavailable.body, { status: 'unavailable' });
+
+  const healthDuringDatabaseFailure = await context.api.get('/api/health');
+  assert.equal(healthDuringDatabaseFailure.status, 200);
+});
+
+test('exports HTTP and migration metrics without configuration values', async () => {
+  const context = await createTestContext();
+  contexts.push(context);
+
+  await context.api.get('/api/health');
+  await context.api.get('/api/not-a-route');
+  const response = await context.api.get('/api/metrics');
+
+  assert.equal(response.status, 200);
+  assert.match(response.headers['content-type'], /^text\/plain/);
+  assert.match(response.text, /bongii_http_requests_total\{status_class="2xx"\} 1/);
+  assert.match(response.text, /bongii_http_requests_total\{status_class="4xx"\} 1/);
+  assert.match(response.text, /bongii_http_errors_total 1/);
+  assert.match(response.text, /bongii_schema_migration_info\{version="\d{3}_[^"]+\.js"\} 1/);
+  assert.equal(response.text.includes(context.database.databasePath), false);
+});
+
+test('correlates requests with redacted structured logs', async () => {
+  const entries = [];
+  const logger = {
+    error(message, details) {
+      entries.push({ level: 'error', message, details });
+    },
+    info(message, details) {
+      entries.push({ level: 'info', message, details });
+    },
+  };
+  const context = await createTestContext({ logger });
+  contexts.push(context);
+  context.database.getAllCampaigns = async () => {
+    throw new Error('database-secret-value');
+  };
+
+  const response = await context.api
+    .get('/api/campaigns?query=query-secret-value')
+    .set('Authorization', 'Bearer header-secret-value');
+
+  assert.equal(response.status, 500);
+  assert.match(response.headers['x-request-id'], /^[0-9a-f-]{36}$/);
+  const failure = entries.find((entry) => entry.message === 'HTTP request failed');
+  const completion = entries.find((entry) => entry.message === 'HTTP request completed');
+  assert.equal(failure.details.requestId, response.headers['x-request-id']);
+  assert.equal(completion.details.requestId, response.headers['x-request-id']);
+  assert.equal(completion.details.statusCode, 500);
+  assert.equal(completion.details.path, '/campaigns');
+  assert.equal(completion.details.method, 'GET');
+  assert.ok(completion.details.durationMs >= 0);
+
+  const serializedEntries = JSON.stringify(entries);
+  assert.equal(serializedEntries.includes('database-secret-value'), false);
+  assert.equal(serializedEntries.includes('query-secret-value'), false);
+  assert.equal(serializedEntries.includes('header-secret-value'), false);
+});
+
 test('creates a campaign and a complete board through the API', async () => {
   const context = await createTestContext();
   contexts.push(context);
   const { registration, login, token } = await createUserAndToken(context.api);
 
-  assert.equal(registration.status, 201);
+  assert.equal(registration.status, 200);
   assert.equal(Object.hasOwn(registration.body, 'password'), false);
   assert.equal(login.status, 200);
   assert.ok(token);
@@ -555,6 +633,13 @@ test('finalizes once, resolves pending outcomes, and publishes deterministic res
   assert.equal(repeatedFinalize.body.alreadyFinalized, true);
   assert.deepEqual(repeatedFinalize.body.result, publicResults.body);
 
+  const metrics = await context.api.get('/api/metrics');
+  assert.match(metrics.text, /bongii_finalization_duration_seconds_count 5/);
+  const duration = Number(metrics.text.match(
+    /bongii_finalization_duration_seconds_sum ([\d.]+)/,
+  )[1]);
+  assert.ok(duration > 0);
+
   await context.restart();
   const afterRestart = await context.api.get(`/api/campaigns/${campaign.code}/results?page=1`);
   assert.equal(afterRestart.status, 200);
@@ -671,33 +756,12 @@ test('does not expose credentials or the former cleanup route', async () => {
   assert.equal(cleanup.status, 404);
 });
 
-test('upgrades a legacy plaintext password after a successful login', async () => {
+test('does not expose legacy password authentication or storage', async () => {
   const context = await createTestContext();
   contexts.push(context);
-  await context.database.addUser({
-    username: 'legacy-user',
-    password: 'legacy-password',
-    firstName: 'Legacy',
-    lastName: 'User',
-    email: 'legacy@example.com',
-    profileIcon: '1',
-  });
 
-  const rejectedLogin = await context.api.post('/api/login').send({
-    username: 'legacy-user',
-    password: 'wrong-password',
-  });
-  assert.equal(rejectedLogin.status, 401);
-
-  const unchangedUser = await context.database.getUserByUsername('legacy-user');
-  assert.equal(unchangedUser.password, 'legacy-password');
-
-  const login = await context.api.post('/api/login').send({
-    username: 'legacy-user',
-    password: 'legacy-password',
-  });
-  assert.equal(login.status, 200);
-
-  const upgradedUser = await context.database.getUserByUsername('legacy-user');
-  assert.match(upgradedUser.password, /^\$2[aby]\$/);
+  assert.equal((await context.api.post('/api/login').send({})).status, 404);
+  assert.equal((await context.api.post('/api/users').send({})).status, 404);
+  const columns = await context.database.connection.all('PRAGMA table_info(users)');
+  assert.equal(columns.some((column) => column.name === 'password'), false);
 });

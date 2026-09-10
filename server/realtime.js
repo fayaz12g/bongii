@@ -16,7 +16,14 @@ const normalizeCampaignCode = (value) => {
   return /^[A-Z]{4}$/.test(campaignCode) ? campaignCode : null;
 };
 
-const createRealtimeServer = ({ server, database, config, campaignEvents, logger = console }) => {
+const createRealtimeServer = ({
+  server,
+  database,
+  config,
+  campaignEvents,
+  logger = console,
+  metrics,
+}) => {
   const isAllowedOrigin = (origin) => !origin || config.allowedOrigins.includes(origin);
   const io = new Server(server, {
     allowRequest(request, callback) {
@@ -37,6 +44,8 @@ const createRealtimeServer = ({ server, database, config, campaignEvents, logger
 
   io.on('connection', (socket) => {
     connectionCount += 1;
+    const reconnecting = socket.recovered || socket.handshake.auth?.reconnecting === true;
+    metrics?.recordSocketConnection({ reconnecting });
     logger.info('Socket connection state', {
       state: 'connected',
       connectionCount,
@@ -85,6 +94,7 @@ const createRealtimeServer = ({ server, database, config, campaignEvents, logger
 
     socket.on('disconnect', (reason) => {
       connectionCount = Math.max(0, connectionCount - 1);
+      metrics?.recordSocketDisconnection();
       logger.info('Socket connection state', {
         state: 'disconnected',
         connectionCount,
