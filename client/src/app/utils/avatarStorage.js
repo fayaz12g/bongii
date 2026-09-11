@@ -4,7 +4,10 @@ import {
   ref,
   uploadBytes,
 } from "firebase/storage";
+import { isUploadedAvatarUrl } from "./avatarUrls.mjs";
 import { getFirebaseStorage } from "./firebase";
+
+export { isUploadedAvatarUrl } from "./avatarUrls.mjs";
 
 const ALLOWED_TYPES = new Map([
   ["image/jpeg", "jpg"],
@@ -37,19 +40,6 @@ export const validateAvatarFile = async (file) => {
     throw new Error("Avatar dimensions must be between 128 and 4096 pixels");
   }
   return extension;
-};
-
-export const isUploadedAvatarUrl = (url, uid) => {
-  try {
-    const parsed = new URL(url);
-    const marker = '/o/';
-    const markerIndex = parsed.pathname.indexOf(marker);
-    if (parsed.hostname !== "firebasestorage.googleapis.com" || markerIndex === -1) return false;
-    const objectPath = decodeURIComponent(parsed.pathname.slice(markerIndex + marker.length));
-    return objectPath.startsWith(`avatars/${uid}/`);
-  } catch {
-    return false;
-  }
 };
 
 export const uploadAvatar = async (uid, file) => {

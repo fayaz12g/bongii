@@ -137,7 +137,8 @@ test("confirms a mock token purchase without collecting payment data", async ({ 
   await expect(confirmation).toContainText("no payment data");
   await confirmation.getByRole("button", { name: "Confirm mock purchase" }).click();
 
-  await expect(page.getByRole("status")).toContainText("100 mock tokens added");
+  await expect(page.getByRole("status").filter({ hasText: "100 mock tokens added" }))
+    .toBeVisible();
   await expect(page.getByLabel("110 Double or Nothing tokens")).toBeVisible();
   await page.reload();
   await expect(page.getByLabel("110 Double or Nothing tokens")).toBeVisible();
@@ -152,7 +153,8 @@ test("uploads and removes an owned avatar while Storage rejects a cross-user wri
   await expect(page.getByRole("heading", { name: "Your Profile" })).toBeVisible();
 
   await page.getByLabel("Upload avatar").setInputFiles("public/avatars/chippy-2.png");
-  await expect(page.getByRole("status")).toContainText("Avatar updated successfully");
+  await expect(page.getByRole("status").filter({ hasText: "Avatar updated successfully" }))
+    .toBeVisible();
   await expect(page.getByAltText("Test Moderator avatar")).toHaveAttribute("src", /44199/);
 
   const denied = await request.post(
@@ -168,5 +170,6 @@ test("uploads and removes an owned avatar while Storage rejects a cross-user wri
   expect(denied.status()).toBe(403);
 
   await page.getByRole("button", { name: "Remove upload" }).click();
-  await expect(page.getByRole("status")).toContainText("Uploaded avatar removed");
+  await expect(page.getByRole("status").filter({ hasText: "Uploaded avatar removed" }))
+    .toBeVisible();
 });

@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 const AUTH_EMULATOR = "http://127.0.0.1:44099";
 const PROJECT_ID = "demo-bongii";
 const API_KEY = "fake-api-key";
@@ -52,7 +54,9 @@ export const createVerifiedUser = async (request, {
 };
 
 export const signInTestUser = async ({ page, request, returnTo = "/home" }) => {
-  const user = await createVerifiedUser(request);
+  const user = await createVerifiedUser(request, {
+    email: `moderator-${randomUUID()}@example.com`,
+  });
   await page.goto(`/login?returnTo=${encodeURIComponent(returnTo)}`);
   await page.getByLabel("Email").fill(user.email);
   await page.getByLabel("Password").fill(user.password);

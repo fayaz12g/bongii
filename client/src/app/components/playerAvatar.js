@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { User } from "lucide-react";
 import { useState } from "react";
+import { isStorageEmulatorUrl } from "../utils/avatarUrls.mjs";
 import { getProfileAvatar } from "../utils/profileAvatars.mjs";
 
 const AvatarImage = ({ avatar, name, size, className }) => {
@@ -31,6 +32,7 @@ const AvatarImage = ({ avatar, name, size, className }) => {
       alt={`${name || "Player"} avatar`}
       width={size}
       height={size}
+      unoptimized={isStorageEmulatorUrl(source)}
       className={`rounded-full object-cover ${className}`}
       onError={() => setFallbackStage(photoUrl && fallbackStage === 0 ? 1 : 2)}
     />

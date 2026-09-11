@@ -163,7 +163,8 @@ export function AuthProvider({ children }) {
 
   const updatePhotoUrl = async (photoURL) => {
     if (!firebaseUser) throw new Error("Authentication required");
-    await updateFirebaseProfile(firebaseUser, { photoURL });
+    // Identity Toolkit rejects a null photoUrl; an empty string clears the attribute.
+    await updateFirebaseProfile(firebaseUser, { photoURL: photoURL ?? "" });
     await firebaseUser.getIdToken(true);
   };
 
